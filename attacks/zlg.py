@@ -33,6 +33,7 @@ def estimate_model_params(model, aux_loader, num_classes, device):
     with torch.no_grad():
         for images, _ in aux_loader:
             images = images.to(device)
+            # images = torch.rand_like(images).to(device)
             
             outputs = model(images)
             probs = torch.softmax(outputs, dim=1)
