@@ -9,9 +9,8 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
     
     Quy trình:
     1. Lấy Gradient Vector (Bias hoặc Weight sum).
-    2. Đảo dấu Proxy (vì Unlearning là Gradient Ascent, Proxy = -Grad).
-    3. Ước lượng impact 'm' từ các giá trị âm.
-    4. Lặp batch_size lần: Tìm min, thêm label, trừ impact.
+    2. Ước lượng impact 'm' từ các giá trị âm.
+    3. Lặp batch_size lần: Tìm min, thêm label, trừ impact.
     """
     
     # --- BƯỚC 1: TRÍCH XUẤT GRADIENT VECTOR ---
@@ -62,7 +61,7 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
 
     # Đảm bảo m luôn âm để phép trừ impact hoạt động đúng logic (trừ số âm = cộng dương)
     if m > 0: m = -m 
-
+    print("Impact llg: ", m)
     # 3b. Vòng lặp trích xuất (Iterative Extraction)
     # Copy để không ảnh hưởng dữ liệu gốc
     g_iter = gradients.clone()

@@ -59,7 +59,6 @@ def attack_mla(proxy_gradients, batch_size, num_classes=10):
             # Lấy data ra numpy, flatten thành vector 1D
             target_bias = proxy_gradients[name].detach().cpu().numpy().flatten()
             break
-    print(target_bias)
     if target_bias is None:
         print("[MLA Error] Không tìm thấy Bias lớp cuối phù hợp.")
         return []
