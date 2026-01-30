@@ -50,12 +50,11 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
 
         # Error term: (p - y)
         error = probs - targets_one_hot
-
+        
         # Tính g_scalar (gradient vô hướng)
         # g_i = Sum(h) * (p_i - y_i)
         sum_h = torch.sum(feat, dim=1) 
         grads_scalar = error * sum_h.unsqueeze(1) # [Batch, NumClasses]
-
         # Tách Impact và Offset
         for i in range(len(labels)):
             lbl = labels[i].item() # Nhãn đúng (Ground Truth)
@@ -63,7 +62,6 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
             # 1. Thu thập Impact (tại nhãn đúng)
             val_impact = grads_scalar[i, lbl].item()
             impacts.append(val_impact)
-
             # 2. Thu thập Offset (tại các nhãn sai)
             # Với mọi class j != lbl, giá trị gradient đó là offset của class j
             for class_idx in range(num_classes):
@@ -75,7 +73,7 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
     handle.remove()
 
     # Tính trung bình
-    m_impact = np.mean(impacts)
+    m_impact = np.mean(impacts)* (1 + 1/num_classes)
     
     # Tính Vector S (Offset cho từng class)
     s_offset_vector = np.zeros(num_classes)
@@ -86,7 +84,7 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
             s_offset_vector[c] = 0.0 # Fallback nếu không có mẫu
 
     print(f" [LLG+] Estimated m={m_impact}")
-    print(f" [LLG+] Estimated S (first 5): {s_offset_vector[:5]}")
+    print(f" [LLG+] Estimated S (first 5): {s_offset_vector}")
 
     return m_impact, s_offset_vector
 

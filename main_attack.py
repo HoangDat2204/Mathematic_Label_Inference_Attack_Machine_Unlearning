@@ -12,12 +12,16 @@ from torch.utils.data import DataLoader, Subset
 
 # --- IMPORT CÁC THUẬT TOÁN ---
 from attacks.llg import attack_llg
-from attacks.llg_plus import attack_llg_plus, compute_impact_stats
+from attacks.llg_plus import attack_llg_plus,compute_impact_stats
 from attacks.zlg import attack_zlg, estimate_model_params
+# from attacks.zlgp import attack_zlgp
 from attacks.rlu import attack_rlu_full
+# from attacks.llg_plus_p import attack_llg_plusp,  compute_impact_and_offsetp
 
 # [NEW] Import MLA
+# from attacks.mla import attack_mla, attack_mla_plus, compute_basis_from_aux
 from attacks.mla import attack_mla
+
 
 def create_balanced_labels(batch_size, num_classes=10):
     """
@@ -95,7 +99,6 @@ def main():
     parser.add_argument('--exact_epochs', default=10, type=int)
     parser.add_argument('--lr', default=0.01, type=float)
     
-    # --- [NEW] THAM SỐ ALPHA ---
     parser.add_argument('--alpha', default=100.0, type=float, 
                         help='Mức độ phân phối IID: Nhỏ (0.1)=Lệch, Lớn (100)=Đều')
     
@@ -105,14 +108,33 @@ def main():
     attack_batch_size = args.batch_size
     
     print("="*60)
-    print(f"BENCHMARK: 5 Attacks (LLG, LLG+, ZLG, RLU, MLA (Ours))")
+    print(f"BENCHMARK: 6 Attacks (LLG, LLG+, ZLG, RLU, MLA, MLA+)")
     print(f"Config: Batch={attack_batch_size} | Alpha={args.alpha} | Loops={args.total_loops}")
     print("="*60)
 
     # 1. Load Data & Models
     retain_loader, forget_loader, _, num_channels, img_size, num_classes = get_dataloaders(args.dataset, batch_size=args.batch_size)
     forget_dataset = forget_loader.dataset
-    aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=32, shuffle=False)
+    
+    
+    finetune_dataset = forget_loader.dataset
+    
+    # --- [SỬA ĐỔI] ---
+    # Lấy Aux Data từ tập Finetune
+    # Cần kiểm tra xem tập finetune có đủ số lượng aux_size không
+    # Nếu không đủ thì lấy toàn bộ tập finetune
+    actual_aux_size = min(args.aux_size, len(finetune_dataset))
+    
+    # Tạo danh sách index từ 0 đến actual_aux_size
+    aux_indices = list(range(actual_aux_size))
+    
+    aux_loader = DataLoader(
+        Subset(finetune_dataset, aux_indices), 
+        batch_size=32, 
+        shuffle=False
+    )
+    
+    # aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=32, shuffle=False)
     
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
@@ -122,10 +144,16 @@ def main():
     unlearner = Unlearner(target_model, base_model, device)
 
     # 2. Pre-compute Stats
+
+
     print("\n[Prep] Computing Aux Statistics...")
     m_impact, s_offset = compute_impact_stats(target_model, aux_loader, num_classes, device)
+    # impact_matrix = compute_impact_and_offsetp(target_model, aux_loader, num_classes, device)    
     mean_p, mean_O = estimate_model_params(target_model, aux_loader, num_classes, device)
-    
+    # print("[Prep] Computing MLA+ Basis Matrix from Aux Data...")
+    # basis_matrix_aux = compute_basis_from_aux(target_model, aux_loader, num_classes, device)
+    # print(basis_matrix_aux)
+
     # --- [NEW] TẠO MAP INDEX THEO CLASS ---
     # Để lấy mẫu theo alpha, ta cần biết index nào thuộc class nào
     print("[Prep] Grouping indices by class for Alpha sampling...")
@@ -147,7 +175,8 @@ def main():
         class_to_indices[lbl].append(idx)
 
     # Init Results
-    methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm','mla']
+    methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla'] # mla_p = MLA+
+    # methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla', 'mla_p', 'zlgp', 'llg+p']
     results = {'approx': {m:0 for m in methods}, 'exact': {m:0 for m in methods}}
     
     # Vòng lặp thí nghiệm
@@ -186,14 +215,22 @@ def main():
         preds['rlu']  = attack_rlu_full(target_model, diff_approx, aux_loader, args.batch_size, args.lr, args.unlearn_epochs, num_classes, device)
         preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, num_classes=num_classes)
         preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
-        
+        # preds['mla_p'] = attack_mla_plus(diff_approx, basis_matrix_aux, attack_batch_size, num_classes)
+        # preds['zlgp']  = attack_zlgp(diff_approx, args.batch_size, num_classes)
+        # preds['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)
+
+        # print(get_label_counts(preds['llg']))
+        print(get_label_counts(preds['mla']))
 
         print(f"[Approx] LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | "
               f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% | "
               f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | "
               f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% | "
               f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | "
-              f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}%")
+              f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | " )
+            #   f"MLA+: {compute_batch_accuracy(true_labels, preds['mla_p']):.1f}% | "
+            #   f"ZLGP: {compute_batch_accuracy(true_labels, preds['zlgp']):.1f}% |"
+            #   f"LLGPP: {compute_batch_accuracy(true_labels, preds['llg+p']):.1f}%") 
         
         for m in preds: results['approx'][m] += compute_batch_accuracy(true_labels, preds[m])
 
@@ -209,14 +246,19 @@ def main():
         preds_ex['rlu']  = attack_rlu_full(target_model, diff_exact, aux_loader, args.batch_size, 0.01, args.exact_epochs, num_classes, device)
         preds_ex['rdm'] = create_balanced_labels( args.batch_size, num_classes)
         preds_ex['mla'] = attack_mla(diff_exact, batch_size=attack_batch_size, num_classes=num_classes)
-        
+        # preds_ex['mla_p'] = attack_mla_plus(diff_exact, basis_matrix_aux, attack_batch_size, num_classes)
+        # preds_ex['zlgp']  = attack_zlgp(diff_exact, args.batch_size, num_classes)
+        # preds_ex['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)
 
         print(f"[Exact ] LLG: {compute_batch_accuracy(true_labels, preds_ex['llg']):.1f}% | "
               f"Plus: {compute_batch_accuracy(true_labels, preds_ex['plus']):.1f}% | "
               f"ZLG: {compute_batch_accuracy(true_labels, preds_ex['zlg']):.1f}% | "
               f"RLU: {compute_batch_accuracy(true_labels, preds_ex['rlu']):.1f}% | "
               f"RDM: {compute_batch_accuracy(true_labels, preds_ex['rdm']):.1f}% | "
-              f"MLA: {compute_batch_accuracy(true_labels, preds_ex['mla']):.1f}%")
+              f"MLA: {compute_batch_accuracy(true_labels, preds_ex['mla']):.1f}% | " )
+            #   f"MLA+: {compute_batch_accuracy(true_labels, preds_ex['mla_p']):.1f}% | "
+            #   f"ZLGP: {compute_batch_accuracy(true_labels, preds_ex['zlgp']):.1f}% | "
+            #   f"LLGPP: {compute_batch_accuracy(true_labels, preds_ex['llg+p']):.1f}%")
                 
         for m in preds_ex: results['exact'][m] += compute_batch_accuracy(true_labels, preds_ex[m])
 

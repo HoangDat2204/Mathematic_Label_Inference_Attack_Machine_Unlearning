@@ -61,7 +61,6 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
 
     # Đảm bảo m luôn âm để phép trừ impact hoạt động đúng logic (trừ số âm = cộng dương)
     if m > 0: m = -m 
-    print("Impact llg: ", m)
     # 3b. Vòng lặp trích xuất (Iterative Extraction)
     # Copy để không ảnh hưởng dữ liệu gốc
     g_iter = gradients.clone()
