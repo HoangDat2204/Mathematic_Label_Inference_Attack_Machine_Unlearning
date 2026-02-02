@@ -9,6 +9,7 @@ from recovery.data import get_dataloaders
 from recovery.nn.custom_cnn import get_custom_model
 from recovery.unlearn import Unlearner, get_weight_difference
 from torch.utils.data import DataLoader, Subset
+import random
 
 # --- IMPORT CÁC THUẬT TOÁN ---
 from attacks.llg import attack_llg
@@ -22,6 +23,67 @@ from attacks.rlu import attack_rlu_full
 # from attacks.mla import attack_mla, attack_mla_plus, compute_basis_from_aux
 from attacks.mla import attack_mla
 
+def set_seed(seed):
+    """
+    Cố định seed cho tất cả các thư viện để đảm bảo kết quả tái lập được.
+    """
+    # 1. Python built-in random
+    random.seed(seed)
+    
+    # 2. NumPy (Quan trọng cho việc lấy mẫu Dirichlet/Multinomial của bạn)
+    np.random.seed(seed)
+    
+    # 3. PyTorch (CPU & GPU)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed) # Cho trường hợp nhiều GPU
+        
+    # 4. Cấu hình backend để thuật toán Convolution luôn chạy giống nhau
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    print(f"[Info] Random Seed set to: {seed}")
+
+
+def compute_overlap_metric(diff_dict, original_model, num_classes=10):
+    """
+    Tính tích trọng số: (W_diff * W_orig) sau đó tổng theo chiều class.
+    Input:
+        diff_dict: Dictionary chứa chênh lệch trọng số (thường ở CPU).
+        original_model: Model gốc (thường ở GPU).
+    Output:
+        Vector kết quả có kích thước [In_Features] (Ví dụ 512 với ResNet18).
+    """
+    target_key = None
+    
+    # 1. Tìm tên layer trọng số lớp cuối (thường là fc.weight hoặc linear.weight)
+    # Layer này có shape [Num_Classes, In_Features] (Ví dụ [10, 512])
+    for k in diff_dict.keys():
+        if 'weight' in k and diff_dict[k].shape[0] == num_classes and len(diff_dict[k].shape) == 2:
+            target_key = k
+            break
+            
+    if target_key is None:
+        print("[Metric Error] Không tìm thấy Weight lớp cuối.")
+        return None
+
+    # 2. Lấy Tensor
+    # diff_dict thường nằm trên CPU (do hàm get_weight_difference trả về)
+    w_diff = diff_dict[target_key] 
+    
+    # Lấy trọng số tương ứng từ model gốc và chuyển về CPU để tính toán
+    w_orig = original_model.state_dict()[target_key].cpu()
+    
+    # 3. Nhân từng phần tử (Element-wise Multiplication)
+    # Shape: [10, 512] * [10, 512] -> [10, 512]
+    product = w_diff * w_orig
+    
+    # 4. Tính tổng theo chiều Class (dim=0 - chiều có kích thước 10)
+    # Kết quả sẽ là vector [512]
+    result_vector = torch.sum(product, dim=1)
+    
+    return result_vector
 
 def create_balanced_labels(batch_size, num_classes=10):
     """
@@ -102,7 +164,11 @@ def main():
     parser.add_argument('--alpha', default=100.0, type=float, 
                         help='Mức độ phân phối IID: Nhỏ (0.1)=Lệch, Lớn (100)=Đều')
     
+    parser.add_argument('--seed', default=42, type=int, help='Seed cố định (ví dụ 42)')
+    
+
     args = parser.parse_args()
+    set_seed(args.seed)
     device = Config.DEVICE
     
     attack_batch_size = args.batch_size
@@ -117,24 +183,24 @@ def main():
     forget_dataset = forget_loader.dataset
     
     
-    finetune_dataset = forget_loader.dataset
+    # finetune_dataset = forget_loader.dataset
     
-    # --- [SỬA ĐỔI] ---
-    # Lấy Aux Data từ tập Finetune
-    # Cần kiểm tra xem tập finetune có đủ số lượng aux_size không
-    # Nếu không đủ thì lấy toàn bộ tập finetune
-    actual_aux_size = min(args.aux_size, len(finetune_dataset))
+    # # --- [SỬA ĐỔI] ---
+    # # Lấy Aux Data từ tập Finetune
+    # # Cần kiểm tra xem tập finetune có đủ số lượng aux_size không
+    # # Nếu không đủ thì lấy toàn bộ tập finetune
+    # actual_aux_size = min(args.aux_size, len(finetune_dataset))
     
-    # Tạo danh sách index từ 0 đến actual_aux_size
-    aux_indices = list(range(actual_aux_size))
+    # # Tạo danh sách index từ 0 đến actual_aux_size
+    # aux_indices = list(range(actual_aux_size))
     
-    aux_loader = DataLoader(
-        Subset(finetune_dataset, aux_indices), 
-        batch_size=32, 
-        shuffle=False
-    )
+    # aux_loader = DataLoader(
+    #     Subset(finetune_dataset, aux_indices), 
+    #     batch_size=32, 
+    #     shuffle=False
+    # )
     
-    # aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=32, shuffle=False)
+    aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=32, shuffle=False)
     
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
@@ -207,13 +273,13 @@ def main():
         # --- A. APPROXIMATE ---
         model_approx = unlearner.approximate_unlearn(batch_input, lr=args.lr)
         diff_approx = get_weight_difference(target_model, model_approx)
-        
+        confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
         preds = {}
         preds['llg']  = attack_llg(diff_approx, num_classes, args.batch_size)
         preds['plus'] = attack_llg_plus(diff_approx, m_impact, s_offset, args.batch_size, num_classes)
         preds['zlg']  = attack_zlg(diff_approx, mean_p, mean_O, args.batch_size, num_classes)
         preds['rlu']  = attack_rlu_full(target_model, diff_approx, aux_loader, args.batch_size, args.lr, args.unlearn_epochs, num_classes, device)
-        preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, num_classes=num_classes)
+        preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, confident = confident_approx,num_classes=num_classes)
         preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
         # preds['mla_p'] = attack_mla_plus(diff_approx, basis_matrix_aux, attack_batch_size, num_classes)
         # preds['zlgp']  = attack_zlgp(diff_approx, args.batch_size, num_classes)
@@ -238,18 +304,18 @@ def main():
         print(f"   [Exact] Retraining...")
         model_exact = unlearner.exact_unlearn(forget_dataset, target_indices, epochs=args.exact_epochs, lr=0.01)
         diff_exact = get_weight_difference(target_model, model_exact)
-        
+        confident_exact = compute_overlap_metric(diff_exact, target_model, num_classes)
         preds_ex = {}
         preds_ex['llg']  = attack_llg(diff_exact, num_classes, args.batch_size)
         preds_ex['plus'] = attack_llg_plus(diff_exact, m_impact, s_offset, args.batch_size, num_classes)
         preds_ex['zlg']  = attack_zlg(diff_exact, mean_p, mean_O, args.batch_size, num_classes)
         preds_ex['rlu']  = attack_rlu_full(target_model, diff_exact, aux_loader, args.batch_size, 0.01, args.exact_epochs, num_classes, device)
         preds_ex['rdm'] = create_balanced_labels( args.batch_size, num_classes)
-        preds_ex['mla'] = attack_mla(diff_exact, batch_size=attack_batch_size, num_classes=num_classes)
+        preds_ex['mla'] = attack_mla(diff_exact, batch_size=attack_batch_size, confident = confident_exact, num_classes=num_classes)
         # preds_ex['mla_p'] = attack_mla_plus(diff_exact, basis_matrix_aux, attack_batch_size, num_classes)
         # preds_ex['zlgp']  = attack_zlgp(diff_exact, args.batch_size, num_classes)
         # preds_ex['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)
-
+        
         print(f"[Exact ] LLG: {compute_batch_accuracy(true_labels, preds_ex['llg']):.1f}% | "
               f"Plus: {compute_batch_accuracy(true_labels, preds_ex['plus']):.1f}% | "
               f"ZLG: {compute_batch_accuracy(true_labels, preds_ex['zlg']):.1f}% | "
