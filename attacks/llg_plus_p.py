@@ -47,7 +47,6 @@ def compute_impact_and_offsetp(model, aux_loader, num_classes, device):
                 sum_grads[lbl] += grad
             counts[lbl] += 1
             
-    # Xây dựng Matrix A [Dimension, Num_Classes]
     impact_matrix = []
     for c in range(num_classes):
         if counts[c] > 0:
@@ -56,7 +55,6 @@ def compute_impact_and_offsetp(model, aux_loader, num_classes, device):
             mean_grad = np.zeros(num_classes) # Fallback nếu Aux thiếu class
         impact_matrix.append(mean_grad)
     
-    # Transpose để có dạng [Dim, Classes] cho phép nhân ma trận
     A = np.array(impact_matrix).T 
     return A
 

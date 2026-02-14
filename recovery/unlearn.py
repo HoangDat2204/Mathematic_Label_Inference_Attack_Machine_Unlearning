@@ -40,12 +40,10 @@ class Unlearner:
             outputs = model(images)
             loss = self.criterion(outputs, labels)
             
-            # Gradient Ascent: Maximize Loss để quên dữ liệu
             loss = -loss 
             loss.backward()
             optimizer.step()
             
-            # (Optional) Có thể thêm log loss tại đây để xem nó tăng lên thế nào
             
         return model
 

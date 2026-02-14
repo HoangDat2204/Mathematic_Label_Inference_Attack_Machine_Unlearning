@@ -16,7 +16,7 @@ from attacks.llg import attack_llg
 from attacks.llg_plus import attack_llg_plus,compute_impact_stats
 from attacks.zlg import attack_zlg, estimate_model_params
 # from attacks.zlgp import attack_zlgp
-from attacks.rlu import attack_rlu_full
+from attacks.rlu_2 import attack_rlu_full
 # from attacks.llg_plus_p import attack_llg_plusp,  compute_impact_and_offsetp
 
 # [NEW] Import MLA
@@ -174,7 +174,7 @@ def main():
     attack_batch_size = args.batch_size
     
     print("="*60)
-    print(f"BENCHMARK: 6 Attacks (LLG, LLG+, ZLG, RLU, MLA, MLA+)")
+    print(f"BENCHMARK: 6 Attacks (LLG, LLG+, ZLG, RLU, MLA)")
     print(f"Config: Batch={attack_batch_size} | Alpha={args.alpha} | Loops={args.total_loops}")
     print("="*60)
 
@@ -200,7 +200,7 @@ def main():
     #     shuffle=False
     # )
     
-    aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=32, shuffle=False)
+    aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
     
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
@@ -311,7 +311,7 @@ def main():
         preds_ex['zlg']  = attack_zlg(diff_exact, mean_p, mean_O, args.batch_size, num_classes)
         preds_ex['rlu']  = attack_rlu_full(target_model, diff_exact, aux_loader, args.batch_size, 0.01, args.exact_epochs, num_classes, device)
         preds_ex['rdm'] = create_balanced_labels( args.batch_size, num_classes)
-        preds_ex['mla'] = attack_mla(diff_exact, batch_size=attack_batch_size, confident = confident_exact, num_classes=num_classes)
+        preds_ex['mla'] = attack_mla(diff_exact, batch_size=attack_batch_size, confident = confident_exact, num_classes=num_classes, approx = False)
         # preds_ex['mla_p'] = attack_mla_plus(diff_exact, basis_matrix_aux, attack_batch_size, num_classes)
         # preds_ex['zlgp']  = attack_zlgp(diff_exact, args.batch_size, num_classes)
         # preds_ex['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)

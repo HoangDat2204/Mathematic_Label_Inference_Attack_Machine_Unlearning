@@ -388,7 +388,7 @@ def create_synthetic_basis_matrix(num_classes, diagonal_value):
 #     return sorted(predicted_labels)
 
 
-def attack_mla(proxy_gradients, batch_size, confident, num_classes=10):
+def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = True):
     """
     MLA Attack: Bias Peeling với Adaptive Diagonal Scaling.
     """
@@ -405,13 +405,13 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10):
         print("[MLA Error] Không tìm thấy Bias lớp cuối phù hợp.")
         return []
 
-    if isinstance(confident, torch.Tensor):
-        target_bias = confident.detach().cpu().numpy().flatten()
-    else:
-        # Nếu lỡ nó đã là list hoặc numpy rồi thì convert cho chắc
-        target_bias = np.array(confident).flatten()
+    # if isinstance(confident, torch.Tensor):
+    #     target_bias = confident.detach().cpu().numpy().flatten()
+    # else:
+    #     # Nếu lỡ nó đã là list hoặc numpy rồi thì convert cho chắc
+    #     target_bias = np.array(confident).flatten()
 
-    print("Target Bias (Hardcoded):", target_bias)
+    # print("Target Bias (Hardcoded):", target_bias)
 
     # 2. TÍNH TOÁN GIÁ TRỊ CƠ SỞ (Cơ bản)
     # Bây giờ target_bias đã là NumPy array, lệnh np.sum sẽ chạy bình thường
@@ -441,8 +441,12 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10):
     # base_diagonal_val là số âm. Nhân với số > 1 sẽ làm nó âm hơn (độ lớn tăng).
     
     # Hệ số nhạy (Sensitivity): beta = 1.0 (Có thể chỉnh lên 2.0 nếu muốn gắt hơn)
-    alpha = 2.0
-    beta = 2.0
+    if (approx == True):
+        alpha = 1.5
+        beta = 3.0
+    else:
+        alpha = 5.0
+        beta = 2.0
     boost_factor = alpha  + beta * (1.0 - max_p)
     
     # Tính Diagonal cuối cùng

@@ -14,6 +14,8 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
     model.eval()
     
     impacts = [] 
+    impact_sums = np.zeros(num_classes)   # Tổng gradient của đúng nhãn (để tính m)
+    impact_counts = np.zeros(num_classes) # Đếm số lượng mẫu của từng nhãn
     # Offset cần lưu riêng cho từng class
     offset_sums = np.zeros(num_classes)
     offset_counts = np.zeros(num_classes)
@@ -39,7 +41,6 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
     for images, labels in aux_loader:
         images, labels = images.to(device), labels.to(device)
         model.zero_grad()
-        
         outputs = model(images)
         feat = features['feat']             
         probs = torch.softmax(outputs, dim=1) 
@@ -55,13 +56,14 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
         # g_i = Sum(h) * (p_i - y_i)
         sum_h = torch.sum(feat, dim=1) 
         grads_scalar = error * sum_h.unsqueeze(1) # [Batch, NumClasses]
-        # Tách Impact và Offset
         for i in range(len(labels)):
             lbl = labels[i].item() # Nhãn đúng (Ground Truth)
             
             # 1. Thu thập Impact (tại nhãn đúng)
             val_impact = grads_scalar[i, lbl].item()
-            impacts.append(val_impact)
+            
+            impact_sums[lbl] += val_impact
+            impact_counts[lbl] += 1
             # 2. Thu thập Offset (tại các nhãn sai)
             # Với mọi class j != lbl, giá trị gradient đó là offset của class j
             for class_idx in range(num_classes):
@@ -70,24 +72,29 @@ def compute_impact_stats(model, aux_loader, num_classes, device):
                     offset_sums[class_idx] += val_offset
                     offset_counts[class_idx] += 1
 
-    handle.remove()
+    class_means_g = []
+    for c in range(num_classes):
+        if impact_counts[c] > 0:
+            g_bar_i = impact_sums[c] / impact_counts[c]
+            class_means_g.append(g_bar_i)
+        else:
+            pass 
 
-    # Tính trung bình
-    m_impact = np.mean(impacts)* (1 + 1/num_classes)
+    if len(class_means_g) == 0:
+        print("[Error] No samples found for impact calculation")
+        return 0.0, np.zeros(num_classes)
+
+    avg_impact_per_class = np.mean(class_means_g)
+
     
-    # Tính Vector S (Offset cho từng class)
+    m_impact = (avg_impact_per_class) * (1 + 1/num_classes)
+
     s_offset_vector = np.zeros(num_classes)
     for c in range(num_classes):
         if offset_counts[c] > 0:
             s_offset_vector[c] = offset_sums[c] / offset_counts[c]
-        else:
-            s_offset_vector[c] = 0.0 # Fallback nếu không có mẫu
-
-    print(f" [LLG+] Estimated m={m_impact}")
-    print(f" [LLG+] Estimated S (first 5): {s_offset_vector}")
-
+            
     return m_impact, s_offset_vector
-
 
 
 def attack_llg_plus(proxy_gradients, m_impact, s_offset_vector, batch_size, num_classes=10):

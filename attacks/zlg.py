@@ -29,7 +29,6 @@ def estimate_model_params(model, aux_loader, num_classes, device):
     handle = final_layer.register_forward_hook(get_features('feat'))
     
     # print("   [ZLG] Estimating model parameters...")
-    
     with torch.no_grad():
         for images, _ in aux_loader:
             images = images.to(device)
@@ -40,7 +39,6 @@ def estimate_model_params(model, aux_loader, num_classes, device):
             
             feat = features['feat']
             O_val = torch.sum(feat, dim=1)
-            
             sum_p += torch.sum(probs, dim=0)
             sum_O += torch.sum(O_val).item()
             total_samples += images.size(0)
@@ -58,7 +56,6 @@ def attack_zlg(proxy_gradients, mean_p, mean_O, batch_size, num_classes=10):
     """
     ZLG Attack (Corrected Device Mismatch).
     """
-    proxy_gradients = {k: -v for k, v in proxy_gradients.items()}    
     # 1. Trích xuất Gradient Scalar (Sum Weights)
     grad_vector = None
     for name in reversed(list(proxy_gradients.keys())):
@@ -73,7 +70,7 @@ def attack_zlg(proxy_gradients, mean_p, mean_O, batch_size, num_classes=10):
      # 2. Xử lý Dấu & Device
     # KHÔNG đảo dấu gradient (trừ khi proxy_gradients là update vector nghịch đảo)
     g = grad_vector 
-    
+    print("ZLG Gradient: ",g)
     if isinstance(mean_p, torch.Tensor):
         g = g.to(mean_p.device)
         

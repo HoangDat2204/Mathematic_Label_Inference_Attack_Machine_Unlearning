@@ -17,10 +17,10 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
     target_grad = None
     
     # Ưu tiên 1: Bias Gradient (Property 1 thể hiện rõ nhất ở Bias: p - y)
-    for name in reversed(list(proxy_gradients.keys())):
-        if 'bias' in name and proxy_gradients[name].shape[0] == num_classes:
-            target_grad = proxy_gradients[name].detach().clone()
-            break
+    # for name in reversed(list(proxy_gradients.keys())):
+    #     if 'bias' in name and proxy_gradients[name].shape[0] == num_classes:
+    #         target_grad = proxy_gradients[name].detach().clone()
+    #         break
             
     # Ưu tiên 2: Weight Gradient (Sum over features)
     if target_grad is None:
@@ -36,9 +36,6 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
         return []
 
     # --- BƯỚC 2: XỬ LÝ DẤU (SIGN CORRECTION) ---
-    # Unlearning Proxy = W_old - W_new = - lr * Gradient
-    # Bài báo yêu cầu Gradient thật.
-    # => Gradient_Paper = - Proxy
     gradients = target_grad 
 
     # --- BƯỚC 3: THUẬT TOÁN 1 (ITERATIVE REMOVAL) ---

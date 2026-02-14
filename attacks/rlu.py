@@ -270,7 +270,6 @@ def posterior_search(initial_N, proxy_update_W, proxy_update_b,
 def attack_rlu_full(model_original, proxy_update, aux_loader, 
                     batch_size, lr, num_epochs=1, num_classes=10, device='cpu'):
 
-    proxy_update = {k: -v for k, v in proxy_update.items()}    
     # 1. Tính S_matrix tĩnh (Dùng cho Single Epoch hoặc Init guess)
     S_matrix = compute_S_matrix(model_original, aux_loader, num_classes, device)
     
@@ -346,11 +345,11 @@ def attack_rlu_counts_only(proxy_update, S_matrix, batch_size, lr, num_classes):
     # 2. Khôi phục Gradient tổng hợp (u) từ Update
     # diff = - lr * g  =>  g = diff / (-lr)
     # u (Target Gradient) = g
-    u = target_update / (-lr)
-
+    u = target_update / (lr)
     # 3. Xây dựng ma trận A
     A = construct_A_matrix(S_matrix, num_classes)
-    
+    print("u: ",u)
+    print("A: ", A)
     # 4. Giải NNLS: argmin ||A * x - u||
     # A shape: [10, 10], u shape: [10]
     # Rất nhanh và ổn định
@@ -457,3 +456,5 @@ def attack_rlu_counts_only(proxy_update, S_matrix, batch_size, lr, num_classes):
 #             predicted_labels.extend([cls_idx] * count)
             
 #     return sorted(predicted_labels)
+
+
