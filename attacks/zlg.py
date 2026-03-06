@@ -70,7 +70,6 @@ def attack_zlg(proxy_gradients, mean_p, mean_O, batch_size, num_classes=10):
      # 2. Xử lý Dấu & Device
     # KHÔNG đảo dấu gradient (trừ khi proxy_gradients là update vector nghịch đảo)
     g = grad_vector 
-    print("ZLG Gradient: ",g)
     if isinstance(mean_p, torch.Tensor):
         g = g.to(mean_p.device)
         

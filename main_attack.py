@@ -23,6 +23,23 @@ from attacks.rlu_2 import attack_rlu_full
 # from attacks.mla import attack_mla, attack_mla_plus, compute_basis_from_aux
 from attacks.mla import attack_mla
 
+from collections import Counter
+
+def count_classes(loader):
+    class_counts = Counter()
+    
+    for _, labels in loader:
+        # Nếu batch_size > 1, labels sẽ là một tensor, ta chuyển về list
+        # Nếu batch_size = 1, labels vẫn có thể là tensor([label])
+        if labels.ndim > 0:
+            class_counts.update(labels.tolist())
+        else:
+            class_counts.update([labels.item()])
+            
+    data=  sorted(class_counts.items())
+    result = [t[1] for t in data]
+    return result
+
 def set_seed(seed):
     """
     Cố định seed cho tất cả các thư viện để đảm bảo kết quả tái lập được.
@@ -201,7 +218,7 @@ def main():
     # )
     
     aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
-    
+    print("aux Data ", count_classes(aux_loader))
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model.load_state_dict(torch.load(os.path.join(Config.MODEL_SAVE_PATH, f"{args.model}_{args.dataset}_pretrained.pth")))
@@ -286,7 +303,6 @@ def main():
         # preds['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)
 
         # print(get_label_counts(preds['llg']))
-        print(get_label_counts(preds['mla']))
 
         print(f"[Approx] LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | "
               f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% | "

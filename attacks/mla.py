@@ -445,8 +445,8 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
         alpha = 1.5
         beta = 3.0
     else:
-        alpha = 5.0
-        beta = 2.0
+        alpha = 10.0
+        beta = 10.0
     boost_factor = alpha  + beta * (1.0 - max_p)
     
     # Tính Diagonal cuối cùng

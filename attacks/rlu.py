@@ -343,13 +343,11 @@ def attack_rlu_counts_only(proxy_update, S_matrix, batch_size, lr, num_classes):
         return []
 
     # 2. Khôi phục Gradient tổng hợp (u) từ Update
-    # diff = - lr * g  =>  g = diff / (-lr)
     # u (Target Gradient) = g
     u = target_update / (lr)
     # 3. Xây dựng ma trận A
     A = construct_A_matrix(S_matrix, num_classes)
-    print("u: ",u)
-    print("A: ", A)
+
     # 4. Giải NNLS: argmin ||A * x - u||
     # A shape: [10, 10], u shape: [10]
     # Rất nhanh và ổn định
