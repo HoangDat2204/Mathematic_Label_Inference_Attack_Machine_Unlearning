@@ -4,10 +4,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import copy
-from torch.utils.data import Subset, DataLoader
+from torch.utils.data import Subset, DataLoader, ConcatDataset
 from configs import Config
 import math # Thêm thư viện math để tính logarit
 from itertools import cycle
+from recovery.nn.custom_cnn import get_custom_model
+import time
+
+
 class DistillKL(nn.Module):
     """Kullback-Leibler Divergence với Temperature Scaling"""
     def __init__(self, T):
@@ -100,18 +104,20 @@ class Unlearner:
             
         return model
 
-    def exact_unlearn(self, full_dataset, indices_to_remove, epochs=5, lr=0.001):
+    def fine_tune_unlearn(self, forget_dataset_base, indices_to_remove, unlr =0.001 ):
         """
         Exact Unlearn: Loại bỏ hoàn toàn tất cả các ảnh trong indices_to_remove
         (Tổng hợp của tất cả các batch trong chuỗi)
         """
+        epochs=5
+        lr=unlr
 
         # 1. Tạo dataset mới: D_new = D_full - {All 80 images}
-        all_indices = set(range(len(full_dataset)))
+        all_indices = set(range(len(forget_dataset_base)))
         remove_indices = set(indices_to_remove)
         keep_indices = list(all_indices - remove_indices)
         
-        sub_dataset = Subset(full_dataset, keep_indices)
+        sub_dataset = Subset(forget_dataset_base, keep_indices)
         loader = DataLoader(sub_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
         
         # 2. Load Base Model (Pretrained on Retain Set)
@@ -135,7 +141,7 @@ class Unlearner:
 
     
 
-    def scrub_unlearn(self, full_dataset, indices_to_remove, epochs=10):
+    def scrub_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, unlr = 0.001):
         """
         Thuật toán SCRUB SOTA: Alternating Min-Max Knowledge Distillation
         """
@@ -145,23 +151,30 @@ class Unlearner:
         T = 2           # Nhiệt độ làm mềm xác suất (Softmax Temperature)
         alpha = 1.0       # Trọng số cho KL Divergence
         gamma = 1       # Trọng số cho Cross-Entropy (thường để rất nhỏ hoặc 0 để tin tưởng hoàn toàn vào Teacher)
-        msteps = 3        # Số lượng epoch cho phép phá hủy (Maximize). Nếu để quá cao, model sẽ hỏng hoàn toàn.
-        sgda_lr=0.001
+        msteps = 1        # Số lượng epoch cho phép phá hủy (Maximize). Nếu để quá cao, model sẽ hỏng hoàn toàn.
+        sgda_lr=unlr
         sgda_momentum = 0.9
         sgda_weight_decay = 0.1
+        epochs=4
         # ==========================================
         # 2. CHUẨN BỊ DATA LOADERS
         # ==========================================
-        all_indices = set(range(len(full_dataset)))
+        all_forget_indices = set(range(len(forget_dataset_base)))
         remove_indices = set(indices_to_remove)
-        keep_indices = list(all_indices - remove_indices)
         
-        retain_dataset = Subset(full_dataset, keep_indices)
-        retain_loader = DataLoader(retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        keep_in_forget_indices = list(all_forget_indices - remove_indices)
         
-        forget_dataset = Subset(full_dataset, list(remove_indices))
-        # Drop_last=True hoặc batch_size nhỏ có thể cần nếu tập forget quá ít ảnh
-        forget_loader = DataLoader(forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        actual_forget_dataset = Subset(forget_dataset_base, list(remove_indices))        
+        remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
+        
+        # C. Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
+        actual_retain_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
+
+        # ==========================================
+        # 2. CHUẨN BỊ DATA LOADERS
+        # ==========================================
+        retain_loader = DataLoader(actual_retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        forget_loader = DataLoader(actual_forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
 
         # ==========================================
         # 3. KHỞI TẠO MÔ HÌNH (STUDENT & TEACHER)
@@ -183,7 +196,7 @@ class Unlearner:
         # ==========================================
         # 4. VÒNG LẶP MIN-MAX (THE ORCHESTRATOR)
         # ==========================================
-        print(f"   [SCRUB Unlearn] Khởi động với {len(keep_indices)} Retain | {len(remove_indices)} Forget...")
+        print(f"   [SCRUB Unlearn] Khởi động với {len(actual_retain_dataset)} Retain | {len(indices_to_remove)} Forget...")
         
         for epoch in range(1, epochs + 1):
             
@@ -207,44 +220,49 @@ class Unlearner:
         return model_s
 
 
-    def neggrad_unlearn(self, full_dataset, indices_to_remove, num_classes=10):
+    def neggrad_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, unlr =  0.001 ,num_classes=10):
         """
         NegGrad+ Unlearn với Chance Level Clamping.
+        Đã cập nhật logic gộp (Merge) Dataset chuẩn xác.
         """
         # ==========================================
-        # 1. TÍNH TOÁN NGƯỠNG CHANCE LEVEL
+        # 1. GÁN CỨNG HYPERPARAMETERS 
         # ==========================================
-        # Xác suất đoán mò là p = 1 / num_classes. Loss Cross-Entropy là -log(p)
         epochs=5
-        lr=0.001
+        lr=unlr
         alpha=0.8
+        
+        
         chance_level = -math.log(1.0 / num_classes)
         
-        # ==========================================
+         # ==========================================
         # 2. CHUẨN BỊ DATA LOADERS
         # ==========================================
-        all_indices = set(range(len(full_dataset)))
+
+        all_forget_indices = set(range(len(forget_dataset_base)))
         remove_indices = set(indices_to_remove)
-        keep_indices = list(all_indices - remove_indices)
         
-        retain_dataset = Subset(full_dataset, keep_indices)
-        retain_loader = DataLoader(retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        keep_in_forget_indices = list(all_forget_indices - remove_indices)
         
-        forget_dataset = Subset(full_dataset, list(remove_indices))
-        forget_loader = DataLoader(forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        actual_forget_dataset = Subset(forget_dataset_base, list(remove_indices))        
+        remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
+        
+        # C. Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
+        actual_retain_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
+
+        retain_loader = DataLoader(actual_retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        forget_loader = DataLoader(actual_forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
 
         # ==========================================
-        # 3. KHỞI TẠO MÔ HÌNH
+        # 3. KHỞI TẠO MÔ HÌNH VÀ VÒNG LẶP (Giữ nguyên như cũ)
         # ==========================================
         model = copy.deepcopy(self.target_model)
         model.train()
         
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
-        # ==========================================
-        # 4. VÒNG LẶP HUẤN LUYỆN
-        # ==========================================
         print(f"   [NegGrad+] Khởi động với alpha={alpha} | Chance Level: {chance_level:.4f}")
+        print(f"   [Data] Retain thực sự: {len(actual_retain_dataset)} mẫu | Forget thực sự: {len(actual_forget_dataset)} mẫu")
         
         for epoch in range(1, epochs + 1):
             total_loss = 0.0
@@ -258,32 +276,21 @@ class Unlearner:
 
                 optimizer.zero_grad()
 
-                # --- FORWARD PASS ---
                 r_outputs = model(r_inputs)
                 f_outputs = model(f_inputs)
 
-                # --- TÍNH LOSS CƠ BẢN ---
                 r_loss = self.criterion(r_outputs, r_targets)
                 f_loss = self.criterion(f_outputs, f_targets)
 
-                # ==============================================================
-                # [QUAN TRỌNG]: CHANCE LEVEL CLAMPING
-                # Giới hạn loss của tập Forget không vượt quá ngưỡng đoán mò.
-                # Nếu f_loss >= chance_level, phần gradient d(f_loss)/d(weights) sẽ bằng 0.
-                # ==============================================================
+                # Clamping ở ngưỡng Chance Level
                 f_loss_clamped = torch.clamp(f_loss, max=chance_level)
 
-                # --- CÔNG THỨC LÕI ---
-                # Sử dụng f_loss_clamped thay vì f_loss gốc
+                # Công thức lõi
                 loss = alpha * r_loss - (1 - alpha) * f_loss_clamped
 
-                # --- BACKWARD PASS ---
                 loss.backward()
-                
-                # (Bạn có thể bỏ hẳn dòng clip_grad_norm_ cũ ở đây, vì Clamping đã xử lý triệt để việc bùng nổ gradient)
                 optimizer.step()
                 
-                # Record (Ghi lại f_loss gốc để dễ theo dõi xem nó vọt lên bao nhiêu)
                 total_loss += loss.item()
                 r_loss_sum += r_loss.item()
                 f_loss_sum += f_loss.item()
@@ -291,8 +298,90 @@ class Unlearner:
             batches = len(retain_loader)
             print(f"   Epoch {epoch}/{epochs} | Tổng Loss: {total_loss/batches:.4f} "
                   f"(Retain: {r_loss_sum/batches:.4f}, Forget (Unclamped): {f_loss_sum/batches:.4f})")
-
         return model
+
+    def retrain_from_scratch(self, retain_dataset_base, forget_dataset_base, indices_to_remove, 
+                         model_name, dataset_name, epochs, lr=0.1, 
+                         num_channels=3, img_size=32, num_classes=10, device='cuda'):
+        """
+        Retrain from Scratch (Gold Standard Model):
+        Xây dựng một mô hình hoàn toàn mới từ đầu (Random Initialization) 
+        chỉ sử dụng phần dữ liệu SẠCH (Retain gốc + phần không bị xóa trong Forget).
+        """
+        # ==========================================
+        # 1. TẠO TẬP DỮ LIỆU HUẤN LUYỆN SẠCH (CLEAN DATASET)
+        # ==========================================
+        # Lọc ra những index không nằm trong danh sách cần xóa
+        all_forget_indices = set(range(len(forget_dataset_base)))
+        remove_indices = set(indices_to_remove)
+        keep_in_forget_indices = list(all_forget_indices - remove_indices)
+        
+        # Lấy phần dữ liệu còn lại của tập Forget
+        remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
+        
+        # Gộp (Merge) Retain gốc và phần Forget an toàn
+        clean_train_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
+        
+        # Khởi tạo DataLoader
+        clean_train_loader = DataLoader(clean_train_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
+        
+        print(f"\n[Retrain from Scratch] Bắt đầu xây dựng Gold Standard Model...")
+        print(f" - Dữ liệu Retain gốc: {len(retain_dataset_base)} mẫu")
+        print(f" - Dữ liệu giữ lại từ Forget: {len(remaining_forget_dataset)} mẫu (Đã xóa vĩnh viễn {len(remove_indices)} mẫu)")
+        print(f" - TỔNG DATA HUẤN LUYỆN MỚI: {len(clean_train_dataset)} mẫu")
+
+        # ==========================================
+        # 2. KHỞI TẠO MÔ HÌNH MỚI TINH (RANDOM WEIGHTS)
+        # ==========================================
+        model = get_custom_model(model_name, num_channels=num_channels, 
+                                num_classes=num_classes, img_size=img_size)
+        model = model.to(device)
+
+        # Khởi tạo Optimizer và LR Scheduler giống với Phase 1A của bạn
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+        scheduler = optim.lr_scheduler.MultiStepLR(
+            optimizer, 
+            milestones=[int(epochs * 0.5), int(epochs * 0.75)], 
+            gamma=0.1
+        )
+
+        # ==========================================
+        # 3. VÒNG LẶP HUẤN LUYỆN (TRAINING LOOP)
+        # ==========================================
+        for epoch in range(epochs):
+            t0 = time.time()
+            model.train()
+            running_loss = 0.0
+            correct = 0
+            total = 0
+            
+            for inputs, targets in clean_train_loader:
+                inputs, targets = inputs.to(device), targets.to(device)
+                
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                loss =  self.criterion(outputs, targets)
+                loss.backward()
+                optimizer.step()
+
+                running_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+                
+            scheduler.step()
+            
+            train_loss = running_loss / len(clean_train_loader)
+            train_acc = 100. * correct / total
+            
+            print(f"   Epoch {epoch+1:02d}/{epochs} | Loss: {train_loss:.3f} | Acc: {train_acc:.2f}% | Time: {time.time()-t0:.1f}s")
+
+        print(f"[Retrain from Scratch] Hoàn tất! Đã có Gold Standard Model.")
+        return model
+
+
+
+    
 
 def get_weight_difference(model_orig, model_new):
     diff_dict = {}
