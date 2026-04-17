@@ -400,7 +400,6 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
             target_bias = proxy_gradients[name].detach().cpu().numpy().flatten()
             break
     
-    print(confident)
     if target_bias is None:
         print("[MLA Error] Không tìm thấy Bias lớp cuối phù hợp.")
         return []
@@ -430,7 +429,6 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
     # Vector này phản ánh độ tự tin của tín hiệu hiện tại
     Basis = create_synthetic_basis_matrix(num_classes, base_diagonal_val)
     probs = calculate_distribution_ratios(target_bias, Basis)
-    print(probs)
     # Bước B: Đo độ lệch (Skewness) bằng Max Probability
     # max_p càng gần 1 -> Lệch (Tín hiệu rõ)
     # max_p càng gần 1/NumClasses -> Đều (Nhiễu nhiều)
@@ -442,11 +440,12 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
     
     # Hệ số nhạy (Sensitivity): beta = 1.0 (Có thể chỉnh lên 2.0 nếu muốn gắt hơn)
     if (approx == True):
-        alpha = 1.5
-        beta = 3.0
+        alpha =1.0 #1.0 #1.0 #1.5
+        beta = 2.0 #1.0 #2.0 #3.0
     else:
         alpha = 10.0
         beta = 10.0
+    print("MAX P: ", max_p)
     boost_factor = alpha  + beta * (1.0 - max_p)
     
     # Tính Diagonal cuối cùng

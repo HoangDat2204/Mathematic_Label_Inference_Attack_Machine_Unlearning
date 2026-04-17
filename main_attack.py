@@ -260,7 +260,7 @@ def main():
     # Init Results
     methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla'] # mla_p = MLA+
     # methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla', 'mla_p', 'zlgp', 'llg+p']
-    results = {'approx': {m:0 for m in methods}, 'exact': {m:0 for m in methods}}
+    results = {'approx': {m:0 for m in methods}, 'exact': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}}
     
     # Vòng lặp thí nghiệm
     for loop in range(args.total_loops):
@@ -290,6 +290,14 @@ def main():
         # --- A. APPROXIMATE ---
         model_approx = unlearner.approximate_unlearn(batch_input, lr=args.lr)
         diff_approx = get_weight_difference(target_model, model_approx)
+        
+        target_bias = None
+        for name in reversed(list(diff_approx.keys())):
+            if 'bias' in name and diff_approx[name].shape[0] == num_classes:
+                target_bias = diff_approx[name].detach().cpu().numpy().flatten()
+                break    
+        print("Target_Bias: ", target_bias)
+
         confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
         preds = {}
         preds['llg']  = attack_llg(diff_approx, num_classes, args.batch_size)
@@ -300,8 +308,6 @@ def main():
         preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
         # preds['mla_p'] = attack_mla_plus(diff_approx, basis_matrix_aux, attack_batch_size, num_classes)
         # preds['zlgp']  = attack_zlgp(diff_approx, args.batch_size, num_classes)
-        # preds['llg+p']  = attack_llg_plusp(diff_approx, impact_matrix, args.batch_size, num_classes)
-
         # print(get_label_counts(preds['llg']))
 
         print(f"[Approx] LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | "
@@ -320,6 +326,14 @@ def main():
         print(f"   [Exact] Retraining...")
         model_exact = unlearner.exact_unlearn(forget_dataset, target_indices, epochs=args.exact_epochs, lr=0.01)
         diff_exact = get_weight_difference(target_model, model_exact)
+                
+        target_bias = None
+        for name in reversed(list(diff_exact.keys())):
+            if 'bias' in name and diff_exact[name].shape[0] == num_classes:
+                target_bias = diff_exact[name].detach().cpu().numpy().flatten()
+                break    
+        print("Target_Bias: ", target_bias)
+
         confident_exact = compute_overlap_metric(diff_exact, target_model, num_classes)
         preds_ex = {}
         preds_ex['llg']  = attack_llg(diff_exact, num_classes, args.batch_size)
@@ -343,18 +357,88 @@ def main():
             #   f"LLGPP: {compute_batch_accuracy(true_labels, preds_ex['llg+p']):.1f}%")
                 
         for m in preds_ex: results['exact'][m] += compute_batch_accuracy(true_labels, preds_ex[m])
+        
+
+        # --- C. SCRUB ---
+        print(f"   [SCRUB] Retraining via Alternating Min-Max Distillation...")
+        
+        # Gọi hàm scrub_unlearn với cấu hình SOTA đã gán cứng bên trong
+        model_scrub = unlearner.scrub_unlearn(forget_dataset, target_indices)
+        
+        # Trích xuất độ lệch trọng số (Gradient/Weight Leakage)
+        diff_scrub = get_weight_difference(target_model, model_scrub)
+        confident_scrub = compute_overlap_metric(diff_scrub, target_model, num_classes)
+        
+        
+        # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
+        preds_sc = {}
+        preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
+        preds_sc['plus'] = attack_llg_plus(diff_scrub, m_impact, s_offset, args.batch_size, num_classes)
+        preds_sc['zlg']  = attack_zlg(diff_scrub, mean_p, mean_O, args.batch_size, num_classes)
+        preds_sc['rlu']  = attack_rlu_full(target_model, diff_scrub, aux_loader, args.batch_size, 0.01, args.exact_epochs, num_classes, device)
+        preds_sc['rdm']  = create_balanced_labels(args.batch_size, num_classes)
+        preds_sc['mla']  = attack_mla(diff_scrub, batch_size=attack_batch_size, confident=confident_scrub, num_classes=num_classes, approx=True)
+
+        print(f"[SCRUB ] LLG: {compute_batch_accuracy(true_labels, preds_sc['llg']):.1f}% | "
+              f"Plus: {compute_batch_accuracy(true_labels, preds_sc['plus']):.1f}% | "
+              f"ZLG: {compute_batch_accuracy(true_labels, preds_sc['zlg']):.1f}% | "
+              f"RLU: {compute_batch_accuracy(true_labels, preds_sc['rlu']):.1f}% | "
+              f"RDM: {compute_batch_accuracy(true_labels, preds_sc['rdm']):.1f}% | "
+              f"MLA: {compute_batch_accuracy(true_labels, preds_sc['mla']):.1f}% | " )
+
+
+        for m in preds_sc: 
+            results['scrub'][m] += compute_batch_accuracy(true_labels, preds_sc[m])
+
+
+        # --- D. NEGGRAD+ ---
+        print(f"   [NegGrad+] Retraining via Gradient Ascent (Chance Level Clamping)...")
+        
+        # Gọi hàm neggrad_unlearn (Các tham số như epochs, lr, alpha đã có default, 
+        # bạn có thể truyền đè vào đây nếu muốn, ví dụ: epochs=args.exact_epochs)
+        model_ng = unlearner.neggrad_unlearn(forget_dataset, target_indices)
+        
+        # Trích xuất độ lệch trọng số (Gradient/Weight Leakage)
+        diff_ng = get_weight_difference(target_model, model_ng)
+        confident_ng = compute_overlap_metric(diff_ng, target_model, num_classes)
+        
+        # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
+        preds_ng = {}
+        preds_ng['llg']  = attack_llg(diff_ng, num_classes, args.batch_size)
+        preds_ng['plus'] = attack_llg_plus(diff_ng, m_impact, s_offset, args.batch_size, num_classes)
+        preds_ng['zlg']  = attack_zlg(diff_ng, mean_p, mean_O, args.batch_size, num_classes)
+        preds_ng['rlu']  = attack_rlu_full(target_model, diff_ng, aux_loader, args.batch_size, 0.01, args.exact_epochs, num_classes, device)
+        preds_ng['rdm']  = create_balanced_labels(args.batch_size, num_classes)
+        
+        # Lưu ý: Cờ approx=True được giữ nguyên theo thiết lập ở khối SCRUB của bạn
+        preds_ng['mla']  = attack_mla(diff_ng, batch_size=attack_batch_size, confident=confident_ng, num_classes=num_classes, approx=True)
+
+        print(f"[NEGGRAD+] LLG: {compute_batch_accuracy(true_labels, preds_ng['llg']):.1f}% | "
+              f"Plus: {compute_batch_accuracy(true_labels, preds_ng['plus']):.1f}% | "
+              f"ZLG: {compute_batch_accuracy(true_labels, preds_ng['zlg']):.1f}% | "
+              f"RLU: {compute_batch_accuracy(true_labels, preds_ng['rlu']):.1f}% | "
+              f"RDM: {compute_batch_accuracy(true_labels, preds_ng['rdm']):.1f}% | "
+              f"MLA: {compute_batch_accuracy(true_labels, preds_ng['mla']):.1f}% | " )
+
+        # Cập nhật kết quả vào từ điển tổng
+        for m in preds_ng: 
+            results['neggrad'][m] += compute_batch_accuracy(true_labels, preds_ng[m])
+
+
 
     # TỔNG KẾT
     print("\n" + "="*60)
     print(f"FINAL AVERAGE ACCURACY | Alpha={args.alpha} | Loops={args.total_loops}")
     print("="*60)
-    print(f"{'Method':<10} | {'Approximate':<12} | {'Exact':<12}")
+    print(f"{'Method':<10} | {'Approximate':<12} | {'Exact':<12} | {'SCRUB':<12}" )
     print("-" * 50)
     for m in methods:
         avg_ap = results['approx'][m] / args.total_loops
+        avg_sc = results['scrub'][m] / args.total_loops
         avg_ex = results['exact'][m] / args.total_loops
+        avg_neg = results['neggrad'][m] / args.total_loops
         name = "MLA (Ours)" if m.upper() == "MLA" else m.upper()
-        print(f"{name:<10} | {avg_ap:10.2f}% | {avg_ex:10.2f}%")
+        print(f"{name:<10} | {avg_ap:10.2f}% | {avg_ex:10.2f}% | {avg_sc:10.2f}%  | {avg_neg:10.2f}%")
     print("="*60)
 
 if __name__ == '__main__':
