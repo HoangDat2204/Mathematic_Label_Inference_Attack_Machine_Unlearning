@@ -5,7 +5,74 @@ import numpy as np
 import copy
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-def compute_expected_confidence(model, aux_loader, num_classes, device, M=10000):
+def learn_stat( k, n, predictions, ground_truths, batch_size):
+    mis_predictions = []
+    for i in range(len(predictions) - 1):
+        for j in range(batch_size):
+            if ground_truths[i][j] == n:
+                mis_predictions.append(predictions[i][j][k])
+
+    if len(mis_predictions) == 0:
+        mis_predictions.append(0)
+
+    return np.array(mis_predictions)
+
+
+def matrix( predictions, ground_truths, batch_size, n_classes):
+    mis_predictions_maxrix = np.zeros((n_classes, n_classes))
+    for i in range(n_classes):
+        for j in range(n_classes):
+            mis_predictions_maxrix[i][j] = np.mean(learn_stat(i, j, predictions, ground_truths, batch_size))
+
+    return mis_predictions_maxrix
+
+
+
+def estimate_static_RLU( model, aux_dataset, batch_size, n_classes):
+    model.train()
+    aux_loader = torch.utils.data.DataLoader(aux_dataset, batch_size=batch_size, shuffle=True)
+
+    model.train()
+    predictions = []
+    predictions_softmax = []
+    ground_truths = []
+    count = 0 
+    for batch_idx, (inputs, targets) in enumerate(aux_loader):
+        inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
+        inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+        count += 1 
+
+        # compute output
+        outputs, _ = model(inputs)
+        probs = torch.softmax(outputs, dim=-1)
+        ground_truths.append(np.array(targets.detach().cpu()))
+        predictions.append(np.array(outputs.detach().cpu()))
+        predictions_softmax.append(np.array(probs.detach().cpu()))
+        # print("="*60)
+        # print("Aux Data batchidx: ", batch_idx)
+        # print("Logit vector: ",  len(outputs))
+        # print("ground_truths vector: ",  getsize(ground_truths))
+        # print("predictions vector: ",  getsize(predictions))
+        # print("predictions_softmax vector: ",  getsize(predictions_softmax))
+    print("count: ", count)
+
+
+
+    mis_predictions_maxrix = matrix(predictions, ground_truths, batch_size, n_classes )
+    mis_predictions_softmax = matrix(predictions_softmax, ground_truths, batch_size, n_classes)
+    mu = np.zeros(n_classes)
+    for i in range(n_classes):
+        mu[i] = (np.sum(mis_predictions_maxrix[i]) - mis_predictions_maxrix[i, i]) / (n_classes - 1)
+    shift = np.zeros(n_classes)
+    for i in range(n_classes):
+        shift[i] = (np.sum(mis_predictions_softmax[i]) - mis_predictions_softmax[i, i]) / (n_classes - 1)
+    return mu, shift
+
+
+
+
+
+def compute_expected_confidence(model, aux_loader, num_classes, batch_size, device, M=10000):
     model.eval()
     logits_dict = {i: [] for i in range(num_classes)}
 
@@ -15,7 +82,6 @@ def compute_expected_confidence(model, aux_loader, num_classes, device, M=10000)
             outputs = model(images)
             
             for i in range(num_classes):
-                # Cách lấy index chuẩn hơn
                 mask = (labels == i)
                 if mask.any(): # Chỉ thêm nếu lớp i có tồn tại trong batch này
                     logits_dict[i].append(outputs[mask])
@@ -132,7 +198,9 @@ def attack_rlu_full(model_original, proxy_update, aux_loader,
     Nguồn: Algorithm 1 [2].
     """
     model_original = model_original.to(device)
-    
+    target_model = copy.deepcopy(model_original)
+
+
     target_update = None
     # Tìm bias layer cuối
     for name in reversed(list(proxy_update.keys())):
@@ -144,58 +212,9 @@ def attack_rlu_full(model_original, proxy_update, aux_loader,
         print("[RLU Error] Không tìm thấy Bias lớp cuối.")
         return []
 
-    # 2. Tính vector u
-    # Bài báo định nghĩa u = Delta_b / eta [1].
-    # Bài báo giả định Gradient Descent: Delta_b = -eta * gradient.
-    # Đề bài cho: proxy_update = eta * gradient.
-    # => Delta_b = -proxy_update.
-    # => u = (-proxy_update) / eta = -grad_b / lr.
+  
     u = -target_update / (lr*batch_size)
     # 3. Tính toán ma trận S và A tại trạng thái t (model gốc)
-    S_t = compute_expected_confidence(model_original, aux_loader, num_classes, device)
-    A_t = construct_matrix_A(S_t, num_classes)
-    
-    final_A = A_t
-    # 4. Xử lý Multi-epoch (Algorithm 1 dòng 12-16 [2])
-    if num_epochs > 1:
-        # Tạo model tại trạng thái t+1: new_model = model + proxy_update
-        model_new = copy.deepcopy(model_original)
-        with torch.no_grad():
-            if isinstance(proxy_update, dict):
-                for name, param in model_new.named_parameters():
-                    if name in proxy_update:
-                        param.add_(proxy_update[name].to(device))
-            elif isinstance(proxy_update, (list, tuple)):
-                for param, update in zip(model_new.parameters(), proxy_update):
-                    param.add_(update.to(device))
-        
-        # Tính S và A tại t+1
-        S_next = compute_expected_confidence(model_new, aux_loader, num_classes, device)
-        A_next = construct_matrix_A(S_next, num_classes)
-        
-        # Trung bình cộng ma trận A (Algorithm 1 dòng 13 [2])
-        final_A = (A_t + A_next) / 2.0
-
-    # 5. Giải hệ phương trình tối ưu để tìm tỉ lệ nhãn z
-    # Gọi hàm đã sửa lỗi "can't optimize a non-leaf Tensor"
-    z = solve_constrained_ls(final_A, u, num_classes, batch_size, device)
-    
-    # 6. Khôi phục số lượng nhãn (Algorithm 1 dòng 11/14 [2])
-    # N(t) = round(|B| * z)
-    predicted_counts = torch.round(z * batch_size).int()
-    
-    # Điều chỉnh sai số làm tròn để tổng bằng batch_size
-    diff = batch_size - predicted_counts.sum().item()
-    if diff != 0:
-        # Cộng phần dư vào lớp có xác suất cao nhất
-        idx_max = torch.argmax(z)
-        predicted_counts[idx_max] += diff
-
-    # 7. Tạo danh sách nhãn
-    predicted_labels = []
-    for cls_idx in range(num_classes):
-        count = predicted_counts[cls_idx].item()
-        if count > 0:
-            predicted_labels.extend([cls_idx] * count)
+    mu, shift = estimate_static_RLU(target_model, aux_loader, batch_size, num_classes)
             
     return sorted(predicted_labels)
