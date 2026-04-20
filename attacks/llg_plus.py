@@ -2,102 +2,81 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import copy
+from torch.utils.data import Dataset
 
-def compute_impact_stats(model, aux_loader, num_classes, device):
+class LocalDataset(Dataset):
     """
-    Tính tham số m (Mean Impact) và S (Vector Offset) từ Aux Data.
-    
-    Ref: 
-    - Impact m: Label-agnostic (Scalar) [3]
-    - Offset S: Label-specific (Vector) [2]
+    because torch.dataloader need override __getitem__() to iterate by index
+    this class is map the index to local dataloader into the whole dataloader
     """
-    model.eval()
+    def __init__(self, dataset, Dict):
+        self.dataset = dataset
+        self.idxs = [int(i) for i in Dict]
+
+    def __len__(self):
+        return len(self.idxs)
+
+    def __getitem__(self, item):
+        X, y = self.dataset[self.idxs[item]]
+        return X, y
+
+def estimate_static_LLG( model, aux_data, n_classes, batch_size):
+    impact = 0
+    offset = torch.zeros(n_classes)
+    label_dict = {}
     
-    impacts = [] 
-    impact_sums = np.zeros(num_classes)   # Tổng gradient của đúng nhãn (để tính m)
-    impact_counts = np.zeros(num_classes) # Đếm số lượng mẫu của từng nhãn
-    # Offset cần lưu riêng cho từng class
-    offset_sums = np.zeros(num_classes)
-    offset_counts = np.zeros(num_classes)
+    y_aux = np.array([target for _, target in aux_data])
+    K = n_classes
+    for k in range(K):
+        idx_k = np.where(y_aux == k)[0]
+        label_dict[k] = list(idx_k)
 
-    print(" [LLG+] Estimating 'm' (Impact) and 'S' (Offset Vector) from Aux Data...")
+    model.train()
+    criterion = nn.CrossEntropyLoss()
+    K = n_classes
+    g_bar = 0
+    prop = 1
+    for k in range(K):
+        dict_k = label_dict[k]
+        aux_num = int(prop*len(dict_k))
+        aux_dict = np.random.choice(dict_k, aux_num)
+        aux_dataset = LocalDataset(aux_data.dataset, aux_dict)
+        aux_loader = torch.utils.data.DataLoader(aux_dataset, batch_size=batch_size, shuffle=True)
 
-    features = {}
-    def get_features(name):
-        def hook(model, input, output):
-            features['feat'] = input[0].detach()
-        return hook
+        g_k = 0
+        count = 0
+        for batch_idx, (inputs, targets) in enumerate(aux_loader):
+            inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
+            inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+            # compute output
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
 
-    # Hook vào layer cuối
-    final_layer = None
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Linear):
-            final_layer = module
-    
-    if final_layer is None: return 0.0, np.zeros(num_classes)
+            grads = torch.autograd.grad(loss, model.linear.parameters())
+            grads = list((_.detach().cpu().clone() for _ in grads))
 
-    handle = final_layer.register_forward_hook(get_features('feat'))
+            w_grad, b_grad = grads[-2], grads[-1]
 
-    for images, labels in aux_loader:
-        images, labels = images.to(device), labels.to(device)
-        model.zero_grad()
-        outputs = model(images)
-        feat = features['feat']             
-        probs = torch.softmax(outputs, dim=1) 
+            gradients_for_prediction = torch.sum(w_grad, dim=-1)
+            g_k += gradients_for_prediction[k]
+            for j in range(K):
+                if j == k:
+                    continue
+                else:
+                    offset[j] += gradients_for_prediction[j]
+            count += 1
 
-        # One-hot
-        targets_one_hot = torch.zeros_like(probs)
-        targets_one_hot.scatter_(1, labels.view(-1, 1), 1)
+        g_k = g_k / count
+        g_bar += g_k
 
-        # Error term: (p - y)
-        error = probs - targets_one_hot
-        
-        # Tính g_scalar (gradient vô hướng)
-        # g_i = Sum(h) * (p_i - y_i)
-        sum_h = torch.sum(feat, dim=1) 
-        grads_scalar = error * sum_h.unsqueeze(1) # [Batch, NumClasses]
-        for i in range(len(labels)):
-            lbl = labels[i].item() # Nhãn đúng (Ground Truth)
-            
-            # 1. Thu thập Impact (tại nhãn đúng)
-            val_impact = grads_scalar[i, lbl].item()
-            
-            impact_sums[lbl] += val_impact
-            impact_counts[lbl] += 1
-            # 2. Thu thập Offset (tại các nhãn sai)
-            # Với mọi class j != lbl, giá trị gradient đó là offset của class j
-            for class_idx in range(num_classes):
-                if class_idx != lbl:
-                    val_offset = grads_scalar[i, class_idx].item()
-                    offset_sums[class_idx] += val_offset
-                    offset_counts[class_idx] += 1
-
-    class_means_g = []
-    for c in range(num_classes):
-        if impact_counts[c] > 0:
-            g_bar_i = impact_sums[c] / impact_counts[c]
-            class_means_g.append(g_bar_i)
-        else:
-            pass 
-
-    if len(class_means_g) == 0:
-        print("[Error] No samples found for impact calculation")
-        return 0.0, np.zeros(num_classes)
-
-    avg_impact_per_class = np.mean(class_means_g)
-
-    
-    m_impact = (avg_impact_per_class) * (1 + 1/num_classes)
-
-    s_offset_vector = np.zeros(num_classes)
-    for c in range(num_classes):
-        if offset_counts[c] > 0:
-            s_offset_vector[c] = offset_sums[c] / offset_counts[c]
-            
-    return m_impact, s_offset_vector
+    impact = g_bar * (1 + 1 / n_classes) / (n_classes * batch_size)
+    offset = offset / ((K - 1) * count)
+    return impact, offset
 
 
-def attack_llg_plus(proxy_gradients, m_impact, s_offset_vector, batch_size, num_classes=10):
+
+def attack_llg_plus(original_model, unlearned_model, proxy_gradients, lr ,aux_loader, batch_size, num_classes=10):
     """
     LLG+ Attack (Correct implementation of Algorithm 1).
     
@@ -106,67 +85,50 @@ def attack_llg_plus(proxy_gradients, m_impact, s_offset_vector, batch_size, num_
         m_impact: Scalar float (Impact).
         s_offset_vector: Numpy array hoặc Tensor shape [num_classes] (Offset).
     """
-    
-    # 1. Trích xuất Gradient Weights và tính Sum (Scalar Gradient)
+    impact, offset = estimate_static_LLG(copy.deepcopy(original_model), aux_data = aux_loader, n_classes = num_classes, batch_size = batch_size)
+    new_impact, new_offset = estimate_static_LLG( copy.deepcopy(unlearned_model), aux_data = aux_loader, n_classes = num_classes, batch_size = batch_size)
+    new_impact = (new_impact + impact) / 2
+    new_offset = (new_offset + offset) / 2
     grad_vector = None
-    
     # Tìm weight layer cuối
     for name in reversed(list(proxy_gradients.keys())):
         if 'weight' in name and len(proxy_gradients[name].shape) == 2:
             if proxy_gradients[name].shape[0] == num_classes:
                 w_grad = proxy_gradients[name]
-                # Tính tổng theo chiều feature: g_i = Sum(W_i)
-                grad_vector = torch.sum(w_grad, dim=1).detach().clone()
+                grad_vector = torch.sum(w_grad,  dim=-1).detach().clone()
                 break
 
-    
-    if grad_vector is None: return []
+    h1_extraction = []
+    gradients_for_prediction = grad_vector/lr
+    print(gradients_for_prediction)
+    print(new_offset)  
+    for i_cg, class_gradient in enumerate(gradients_for_prediction):
+                    if class_gradient < 0:
+                        h1_extraction.append((i_cg, class_gradient))
 
-    # Unlearning Proxy thường ngược dấu với Gradient Descent chuẩn.
-    # LLG gốc giả định g_i < 0 là nhãn đúng.
-    # Nếu proxy_gradients của bạn là gradient ascent, bạn cần đổi dấu.
-    # Giả sử input đã đúng hướng gradient descent:
-    G = grad_vector.clone() # Vector G trong Algorithm 1
-    
-    # Chuyển offset về tensor nếu cần
-    if not isinstance(s_offset_vector, torch.Tensor):
-        S = torch.tensor(s_offset_vector, device=G.device, dtype=G.dtype)
-    else:
-        S = s_offset_vector
+    gradients_for_prediction -= new_offset
+    prediction = []
+
+    for (i_c, _) in h1_extraction:
+        prediction.append(i_c)
+        gradients_for_prediction[i_c] = gradients_for_prediction[i_c].add(-impact)
+
+    for _ in range(batch_size - len(prediction)):
+        # add minimal candidate, likely to be doubled, to prediction
+        min_id = torch.argmin(gradients_for_prediction).item()
+        prediction.append(min_id)
+
+        # add the mean value of one occurrence to the candidate
+        gradients_for_prediction[min_id] = gradients_for_prediction[min_id].add(-new_impact)
+
+    n = []
+    for i in range(num_classes):
+        n.append(prediction.count(i))
 
     predicted_labels = []
+    for cls_idx in range(num_classes):
+        c = n[cls_idx]
+        if c > 0:
+            predicted_labels.extend([cls_idx] * c)
     
-    # --- ALGORITHM 1 STEP 1: Property 1 (Extract Negative Gradients) ---
-    # Duyệt qua G, nếu g_i < 0 -> chắc chắn là label [1, 4]
-    # Lưu ý: Property 1 đúng tuyệt đối trước khi trừ Offset.
-    
-    for i in range(num_classes):
-        # Bài báo: "for g_i in G do if g_i < 0 then append i to E..."
-        # Nếu g_i rất âm, nó có thể chứa nhiều instance, nhưng Algo 1 
-        # chỉ mô tả vòng lặp đơn giản check < 0.
-        if G[i] < 0:
-            predicted_labels.append(i)
-            G[i] = G[i] - m_impact # Cập nhật gradient (trừ số âm = cộng)
-            
-            # Kiểm tra an toàn: không bóc quá số lượng batch_size
-            if len(predicted_labels) >= batch_size:
-                return sorted(predicted_labels)
-
-    # --- ALGORITHM 1 STEP 2: Calibration (Subtract Offset) ---
-    # G <- G - S [1]
-    G = G - S
-
-    # --- ALGORITHM 1 STEP 3: Heuristic Extraction (Find Min) ---
-    # "After calibration, the minimum gradient value... corresponding to a label" [5]
-    
-    while len(predicted_labels) < batch_size:
-        # Tìm phần tử nhỏ nhất (Most Negative)
-        min_val, idx_tensor = torch.min(G, dim=0)
-        idx = idx_tensor.item()
-
-        predicted_labels.append(idx)
-        
-        # Cập nhật Gradient: g_i <- g_i - m
-        G[idx] = G[idx] - m_impact
-
     return sorted(predicted_labels)

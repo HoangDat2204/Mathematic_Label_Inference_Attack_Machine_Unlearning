@@ -13,10 +13,10 @@ import random
 
 # --- IMPORT CÁC THUẬT TOÁN ---
 from attacks.llg import attack_llg
-from attacks.llg_plus import attack_llg_plus,compute_impact_stats
-from attacks.zlg import attack_zlg, estimate_model_params
+from attacks.llg_plus import attack_llg_plus
+from attacks.zlg import attack_zlg
 # from attacks.zlgp import attack_zlgp
-from attacks.rlu_2 import attack_rlu_full
+from attacks.rlu import attack_rlu_full
 # from attacks.llg_plus_p import attack_llg_plusp,  compute_impact_and_offsetp
 
 # [NEW] Import MLA
@@ -202,7 +202,7 @@ def main():
     retain_dataset = retain_loader.dataset
     
     
-    aux_loader = DataLoader(Subset(retain_loader.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
+    aux_loader = DataLoader(Subset(forget_dataset.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
     print("aux Data ", count_classes(aux_loader))
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
@@ -211,16 +211,7 @@ def main():
 
     unlearner = Unlearner(target_model, base_model, device)
 
-    # 2. Pre-compute Stats
-
-
-    print("\n[Prep] Computing Aux Statistics...")
-    m_impact, s_offset = compute_impact_stats(target_model, aux_loader, num_classes, device)
-    # impact_matrix = compute_impact_and_offsetp(target_model, aux_loader, num_classes, device)    
-    mean_p, mean_O = estimate_model_params(target_model, aux_loader, num_classes, device)
-    # print("[Prep] Computing MLA+ Basis Matrix from Aux Data...")
-    # basis_matrix_aux = compute_basis_from_aux(target_model, aux_loader, num_classes, device)
-    # print(basis_matrix_aux)
+  
 
     # --- [NEW] TẠO MAP INDEX THEO CLASS ---
     # Để lấy mẫu theo alpha, ta cần biết index nào thuộc class nào
@@ -266,7 +257,7 @@ def main():
         labels = torch.tensor(batch_labels).to(device)
         true_labels = sorted(labels.tolist())
         batch_input = [(images, labels)]
-
+        print("True label : ", true_labels)
         # --- A. APPROXIMATE ---
 
         if (args.unlearned_algo == "neggrad"):
@@ -276,19 +267,14 @@ def main():
             model_approx = unlearner.approximate_unlearn(batch_input, lr=args.unlr)
             diff_approx = get_weight_difference(target_model, model_approx)
             
-            target_bias = None
-            for name in reversed(list(diff_approx.keys())):
-                if 'bias' in name and diff_approx[name].shape[0] == num_classes:
-                    target_bias = diff_approx[name].detach().cpu().numpy().flatten()
-                    break    
-            print("Target_Bias: ", target_bias)
+            
 
             confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
             preds = {}
             preds['llg']  = attack_llg(diff_approx, num_classes, args.batch_size)
-            preds['plus'] = attack_llg_plus(diff_approx, m_impact, s_offset, args.batch_size, num_classes)
-            preds['zlg']  = attack_zlg(diff_approx, mean_p, mean_O, args.batch_size, num_classes)
-            preds['rlu']  = attack_rlu_full(target_model, diff_approx, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
+            preds['plus'] = attack_llg_plus(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
+            preds['zlg']  = attack_zlg(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
+            preds['rlu']  = attack_rlu_full(target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
             preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, confident = confident_approx,num_classes=num_classes)
             preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
 
@@ -319,9 +305,9 @@ def main():
             confident_fine_tune = compute_overlap_metric(diff_fine_tune, target_model, num_classes)
             preds_ft = {}
             preds_ft['llg']  = attack_llg(diff_fine_tune, num_classes, args.batch_size)
-            preds_ft['plus'] = attack_llg_plus(diff_fine_tune, m_impact, s_offset, args.batch_size, num_classes)
-            preds_ft['zlg']  = attack_zlg(diff_fine_tune, mean_p, mean_O, args.batch_size, num_classes)
-            preds_ft['rlu']  = attack_rlu_full(target_model, diff_fine_tune, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
+            preds_ft['plus'] = attack_llg_plus(target_model, model_fine_tune, diff_fine_tune, 1, aux_loader, args.batch_size, num_classes)
+            preds_ft['zlg']  = attack_zlg(target_model, model_fine_tune, diff_fine_tune, 1, aux_loader, args.batch_size, num_classes)
+            preds_ft['rlu']  = attack_rlu_full(target_model, model_fine_tune, diff_fine_tune, aux_loader, args.batch_size, 1, num_epochs= 1, num_classes = num_classes, device = device)
             preds_ft['rdm'] = create_balanced_labels( args.batch_size, num_classes)
             preds_ft['mla'] = attack_mla(diff_fine_tune, batch_size=attack_batch_size, confident = confident_fine_tune, num_classes=num_classes, approx = False)
         

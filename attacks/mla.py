@@ -440,7 +440,7 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
     
     # Hệ số nhạy (Sensitivity): beta = 1.0 (Có thể chỉnh lên 2.0 nếu muốn gắt hơn)
     if (approx == True):
-        alpha =1.0 #1.0 #1.0 #1.5
+        alpha =1.7 #1.0 #1.0 #1.5
         beta = 2.0 #1.0 #2.0 #3.0
     else:
         alpha = 10.0

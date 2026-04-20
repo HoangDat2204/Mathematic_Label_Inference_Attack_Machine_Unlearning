@@ -2,108 +2,107 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import copy
+from torch.utils.data import Dataset
 
-def estimate_model_params(model, aux_loader, num_classes, device):
+
+class LocalDataset(Dataset):
     """
-    Ước lượng tham số p (Mean Probability) và O_bar (Mean Feature Sum).
+    because torch.dataloader need override __getitem__() to iterate by index
+    this class is map the index to local dataloader into the whole dataloader
     """
-    model.eval()
-    
-    sum_p = torch.zeros(num_classes).to(device)
-    sum_O = 0.0 
-    total_samples = 0
-    
-    features = {}
-    def get_features(name):
-        def hook(model, input, output):
-            features['feat'] = input[0].detach()
-        return hook
+    def __init__(self, dataset, Dict):
+        self.dataset = dataset
+        self.idxs = [int(i) for i in Dict]
 
-    final_layer = None
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Linear):
-            final_layer = module
-    
-    if final_layer is None: return None, None
+    def __len__(self):
+        return len(self.idxs)
 
-    handle = final_layer.register_forward_hook(get_features('feat'))
-    
-    # print("   [ZLG] Estimating model parameters...")
-    with torch.no_grad():
-        for images, _ in aux_loader:
-            images = images.to(device)
-            # images = torch.rand_like(images).to(device)
-            
-            outputs = model(images)
-            probs = torch.softmax(outputs, dim=1)
-            
-            feat = features['feat']
-            O_val = torch.sum(feat, dim=1)
-            sum_p += torch.sum(probs, dim=0)
-            sum_O += torch.sum(O_val).item()
-            total_samples += images.size(0)
-            
-    handle.remove()
-    
-    if total_samples == 0: return None, 1.0
+    def __getitem__(self, item):
+        X, y = self.dataset[self.idxs[item]]
+        return X, y
 
-    mean_p = sum_p / total_samples
-    mean_O = sum_O / total_samples
-    
-    return mean_p, mean_O
 
-def attack_zlg(proxy_gradients, mean_p, mean_O, batch_size, num_classes=10):
+
+def estimate_static_ZLG(model, aux_data, batch_size, n_classes):
+    O_bar = 0
+    pj = torch.zeros(n_classes).cuda()
+    label_dict = {}
+
+   
+    y_aux = np.array([target for _, target in aux_data])
+    K = n_classes
+    for k in range(K):
+        idx_k = np.where(y_aux == k)[0]
+        label_dict[k] = list(idx_k)
+
+    model.train()
+    criterion = nn.CrossEntropyLoss()
+    K = n_classes
+    prop = 1
+
+    for k in range(K):
+        dict_k = label_dict[k]
+        aux_num = int(prop * len(dict_k))
+        aux_dict = np.random.choice(dict_k, aux_num)
+        aux_dataset = LocalDataset(aux_data.dataset, aux_dict)
+        aux_loader = torch.utils.data.DataLoader(aux_dataset, batch_size=batch_size, shuffle=True)
+
+        count = 0
+        for batch_idx, (inputs, targets) in enumerate(aux_loader):
+            inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
+            inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+            # compute output
+            outputs, embedding = model.forward_with_features(inputs)
+            loss = criterion(outputs, targets)
+
+            probs = torch.softmax(outputs, dim=-1)
+
+            mean_probs = torch.mean(probs, dim=0)
+            embedding_sum = torch.sum(embedding, dim=1)
+
+            mean_embedding = torch.mean(embedding_sum, dim=0)
+
+            O_bar += mean_embedding
+            pj[k] += mean_probs[k]
+            count += 1
+
+    O_bar = O_bar / (n_classes * count)
+    pj = pj / (count)
+    return O_bar, pj
+
+def attack_zlg(original_model, unlearned_model, proxy_gradients, lr ,aux_loader, batch_size, num_classes=10):
     """
     ZLG Attack (Corrected Device Mismatch).
     """
     # 1. Trích xuất Gradient Scalar (Sum Weights)
+    O_bar, pj = estimate_static_ZLG( copy.deepcopy(original_model), aux_loader, batch_size, num_classes)
+
+    new_O_bar, new_pj = estimate_static_ZLG( copy.deepcopy(unlearned_model), aux_loader, batch_size, num_classes)
+    new_O_bar = (new_O_bar + O_bar) / 2
+    new_pj = (new_pj + pj) / 2
+
+
     grad_vector = None
     for name in reversed(list(proxy_gradients.keys())):
         if 'weight' in name and len(proxy_gradients[name].shape) == 2:
             if proxy_gradients[name].shape[0] == num_classes:
                 w_grad = proxy_gradients[name]
-                grad_vector = torch.sum(w_grad, dim=1).detach().clone()
+                grad_vector = torch.sum(w_grad,  dim=-1).detach().clone()
                 break
-    
-    if grad_vector is None: return []
 
-     # 2. Xử lý Dấu & Device
-    # KHÔNG đảo dấu gradient (trừ khi proxy_gradients là update vector nghịch đảo)
-    g = grad_vector 
-    if isinstance(mean_p, torch.Tensor):
-        g = g.to(mean_p.device)
-        
-    # 3. Giải phương trình tìm y (Theo Eq. 16 trong bài báo)
-    if abs(mean_O) < 1e-9: mean_O = 1.0
-    
-    # Formula: Sum_y = Sum_p - (Batch_Size * Gradient) / Mean_O
-    # Lưu ý: Gradient ở đây là gradient trung bình của batch (theo Eq. 12 FedSGD)
-    y_raw = (batch_size * mean_p) - ((batch_size * g) / mean_O)
-    
-    # 4. Làm tròn số lượng
-    y_pos = torch.relu(y_raw)
-    
-    current_sum = y_pos.sum()
-    if current_sum > 1e-6:
-        y_scaled = y_pos * (batch_size / current_sum)
-    else:
-        y_scaled = y_pos
-        
-    floor_counts = torch.floor(y_scaled).int()
-    remainders = y_scaled - floor_counts
-    
-    diff = int(batch_size - floor_counts.sum())
-    
-    if diff > 0:
-        _, top_indices = torch.topk(remainders, diff)
-        for idx in top_indices:
-            floor_counts[idx] += 1
-            
-    # 5. Convert sang list labels
+    gradients_for_prediction = grad_vector/lr
+    n = []
+    for i in range(num_classes):
+        nj = batch_size * (new_pj[i].detach().cpu() - gradients_for_prediction[i] / new_O_bar.detach().cpu())
+        n.append(max(int(nj.item()), 0))
+    prop = (batch_size) / sum(n)
+    for i in range(num_classes):
+        n[i] = round(n[i] * prop)
     predicted_labels = []
     for cls_idx in range(num_classes):
-        count = floor_counts[cls_idx].item()
-        if count > 0:
-            predicted_labels.extend([cls_idx] * count)
-            
+        c = n[cls_idx]
+        if c > 0:
+            predicted_labels.extend([cls_idx] * c)
+    
     return sorted(predicted_labels)

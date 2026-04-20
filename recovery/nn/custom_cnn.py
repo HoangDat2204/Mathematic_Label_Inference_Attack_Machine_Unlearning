@@ -116,6 +116,25 @@ class ResNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+    def forward_with_features(self, x):
+        """
+        Hàm này trả về cả kết quả phân loại (logits) và véc-tơ đặc trưng (features)
+        """
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        
+        out = F.avg_pool2d(out, 4)
+        
+        # Đặc trưng (features) chính là sau khi qua lớp Pooling và Flatten
+        features = out.view(out.size(0), -1)
+        
+        # Kết quả phân loại (logits)
+        logits = self.linear(features)
+        
+        return logits, features
 
 # ==========================================
 # 3. MOBILENET V2 (CIFAR/MNIST VERSION)

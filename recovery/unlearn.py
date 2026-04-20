@@ -100,6 +100,14 @@ class Unlearner:
             loss = -loss 
             loss.backward()
             optimizer.step()
+        
+        
+        grads = []
+        for param in model.parameters():
+            grads.append(param.grad.detach().cpu().clone())
+        w_grad, b_grad = grads[-2], grads[-1]
+        gradients_for_prediction = torch.sum(w_grad, dim=-1)
+        print(gradients_for_prediction)
             
             
         return model
@@ -359,7 +367,7 @@ class Unlearner:
                 inputs, targets = inputs.to(device), targets.to(device)
                 
                 optimizer.zero_grad()
-                outputs = model(inputs)
+                outputs,_ = model(inputs)
                 loss =  self.criterion(outputs, targets)
                 loss.backward()
                 optimizer.step()
@@ -390,4 +398,5 @@ def get_weight_difference(model_orig, model_new):
     for k in state_orig.keys():
         if 'weight' in k or 'bias' in k:
             diff_dict[k] = (state_new[k] - state_orig[k]).cpu().detach()
+   
     return diff_dict
