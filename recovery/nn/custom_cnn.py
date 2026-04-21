@@ -203,6 +203,25 @@ class MobileNetV2(nn.Module):
         out = self.linear(out)
         return out
 
+    def forward_with_features(self, x):
+        # Luồng xử lý qua các lớp tích chập
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layers(out)
+        out = F.relu(self.bn2(self.conv2(out)))
+        
+        # Bước Pooling để giảm chiều không gian
+        out = F.avg_pool2d(out, 4)
+        
+        # Trích xuất Features: Làm phẳng véc-tơ đặc trưng
+        # Đây là thông tin cô đọng nhất trước khi dự đoán lớp
+        features = out.view(out.size(0), -1)
+        
+        # Tính Logits: Đưa qua lớp linear cuối cùng để phân loại
+        logits = self.linear(features)
+        
+        # Trả về cả hai giá trị theo yêu cầu
+        return logits, features
+
 # ==========================================
 # FACTORY FUNCTION
 # ==========================================
