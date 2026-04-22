@@ -101,7 +101,7 @@ def attack_llg_plus(original_model, unlearned_model, proxy_gradients, lr ,aux_lo
     h1_extraction = []
     gradients_for_prediction = grad_vector/lr
     print(gradients_for_prediction)
-    print(new_offset)  
+
     for i_cg, class_gradient in enumerate(gradients_for_prediction):
                     if class_gradient < 0:
                         h1_extraction.append((i_cg, class_gradient))

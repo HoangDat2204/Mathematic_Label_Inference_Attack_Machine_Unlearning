@@ -95,9 +95,7 @@ class Unlearner:
             
             optimizer.zero_grad()
             outputs = model(images)
-            loss = self.criterion(outputs, labels)
-            
-            loss = -loss 
+            loss = -self.criterion(outputs, labels)
             loss.backward()
             optimizer.step()
         
@@ -106,10 +104,7 @@ class Unlearner:
         for param in model.parameters():
             grads.append(param.grad.detach().cpu().clone())
         w_grad, b_grad = grads[-2], grads[-1]
-        gradients_for_prediction = torch.sum(w_grad, dim=-1)
-        print(gradients_for_prediction)
-            
-            
+        gradients_for_prediction = torch.sum(w_grad, dim=-1)            
         return model
 
     def fine_tune_unlearn(self, forget_dataset_base, indices_to_remove, unlr =0.001 ):
@@ -303,6 +298,9 @@ class Unlearner:
                 r_loss_sum += r_loss.item()
                 f_loss_sum += f_loss.item()
 
+
+
+            
             batches = len(retain_loader)
             print(f"   Epoch {epoch}/{epochs} | Tổng Loss: {total_loss/batches:.4f} "
                   f"(Retain: {r_loss_sum/batches:.4f}, Forget (Unclamped): {f_loss_sum/batches:.4f})")

@@ -203,7 +203,6 @@ def main():
     
     
     aux_loader = DataLoader(Subset(forget_dataset.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
-    print("aux Data ", count_classes(aux_loader))
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model.load_state_dict(torch.load(os.path.join(Config.MODEL_SAVE_PATH, f"{args.model}_{args.dataset}_pretrained.pth")))
@@ -241,7 +240,7 @@ def main():
     # Vòng lặp thí nghiệm
     for loop in range(args.total_loops):
         print(f"\n>>> Loop {loop+1}/{args.total_loops} (Alpha={args.alpha})")
-        
+
         # --- [NEW] LẤY MẪU THEO ALPHA ---
         # Thay vì lấy tuần tự, ta lấy ngẫu nhiên theo phân phối Dirichlet
         target_indices = sample_batch_indices(class_to_indices, args.alpha, args.batch_size, num_classes)
@@ -266,7 +265,6 @@ def main():
 
             model_approx = unlearner.approximate_unlearn(batch_input, lr=args.unlr)
             diff_approx = get_weight_difference(target_model, model_approx)
-            
             
 
             confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)

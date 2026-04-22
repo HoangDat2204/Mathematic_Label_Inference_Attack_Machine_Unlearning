@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 import copy
 from torch.utils.data import Dataset
-
+import math
 
 class LocalDataset(Dataset):
     """
@@ -92,13 +92,35 @@ def attack_zlg(original_model, unlearned_model, proxy_gradients, lr ,aux_loader,
                 break
 
     gradients_for_prediction = grad_vector/lr
-    n = []
+    raw_n = []
     for i in range(num_classes):
         nj = batch_size * (new_pj[i].detach().cpu() - gradients_for_prediction[i] / new_O_bar.detach().cpu())
-        n.append(max(int(nj.item()), 0))
-    prop = (batch_size) / sum(n)
-    for i in range(num_classes):
-        n[i] = round(n[i] * prop)
+        raw_n.append(max(nj.item(), 0))
+
+    # 2. Tính tỷ lệ chuẩn hóa trên số thực trước
+    total_raw = sum(raw_n)
+    if total_raw == 0:
+        # Handle trường hợp cực đoan: chia đều cho các class hoặc gán cho class có gradient cao nhất
+        n = [batch_size // num_classes] * num_classes 
+    else:
+        # Tính giá trị thực đã scale
+        scaled_n = [(val * batch_size / total_raw) for val in raw_n]
+        
+        # Lấy phần nguyên
+        n = [int(val) for val in scaled_n]
+        
+        # Tính phần còn thiếu do làm tròn xuống
+        remainder = batch_size - sum(n)
+        
+        # Sắp xếp các chỉ số có phần thập phân giảm dần để bù vào
+        # Ví dụ: 0.9 sẽ được ưu tiên cộng 1 trước 0.4
+        diffs = [(i, scaled_n[i] - n[i]) for i in range(num_classes)]
+        diffs.sort(key=lambda x: x[1], reverse=True)
+        
+        for i in range(int(remainder)):
+            idx = diffs[i][0]
+            n[idx] += 1
+
     predicted_labels = []
     for cls_idx in range(num_classes):
         c = n[cls_idx]
