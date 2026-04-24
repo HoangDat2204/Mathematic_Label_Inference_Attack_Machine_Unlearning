@@ -3,7 +3,7 @@ python prepare_model.py --dataset cifar10 --model ResNet18 --pretrain_epochs 10 
 
 
 #NegGrad Unlearn Method
-python main_attack.py --dataset cifar100 --model MobileNetV2 --unlearned_algo neggrad  --aux_size 1000 --total_loops 100 --unlr 0.01 --alpha 1 --batch_size 4 --seed 0
+python main_attack.py --dataset cifar10 --model ResNet18 --unlearned_algo neggrad  --aux_size 200 --total_loops 5 --unlr 0.01 --alpha 1 --batch_size 8 --seed 0
 
 
 #Finetune Unlearn Method
