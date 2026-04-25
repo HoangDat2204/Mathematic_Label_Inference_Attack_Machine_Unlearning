@@ -335,9 +335,9 @@ def main():
             # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_sc = {}
             preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
-            preds_sc['plus'] = attack_llg_plus(diff_scrub, m_impact, s_offset, args.batch_size, num_classes)
-            preds_sc['zlg']  = attack_zlg(diff_scrub, mean_p, mean_O, args.batch_size, num_classes)
-            preds_sc['rlu']  = attack_rlu_full(target_model, diff_scrub, aux_loader, args.batch_size, args.unlr,num_epochs= 1, num_classes = num_classes, device = device)
+            preds_sc['plus'] = attack_llg_plus(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
+            preds_sc['zlg']  = attack_zlg(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
+            preds_sc['rlu']  = attack_rlu_full(target_model, model_scrub, diff_scrub, aux_loader, args.batch_size, 0.001, num_epochs= 1, num_classes = num_classes, device = device)
             preds_sc['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             preds_sc['mla']  = attack_mla(diff_scrub, batch_size=attack_batch_size, confident=confident_scrub, num_classes=num_classes, approx=True)
 
@@ -366,9 +366,9 @@ def main():
             # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_ng = {}
             preds_ng['llg']  = attack_llg(diff_ng, num_classes, args.batch_size)
-            preds_ng['plus'] = attack_llg_plus(diff_ng, m_impact, s_offset, args.batch_size, num_classes)
-            preds_ng['zlg']  = attack_zlg(diff_ng, mean_p, mean_O, args.batch_size, num_classes)
-            preds_ng['rlu']  = attack_rlu_full(target_model, diff_ng, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
+            preds_ng['plus'] = attack_llg_plus(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_ng['zlg']  = attack_zlg(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_ng['rlu']  = attack_rlu_full(target_model, model_ng, diff_ng, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
             preds_ng['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             
             # Lưu ý: Cờ approx=True được giữ nguyên theo thiết lập ở khối SCRUB của bạn
@@ -412,9 +412,9 @@ def main():
             # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_rt = {}
             preds_rt['llg']  = attack_llg(diff_retrain, num_classes, args.batch_size)
-            preds_rt['plus'] = attack_llg_plus(diff_retrain, m_impact, s_offset, args.batch_size, num_classes)
-            preds_rt['zlg']  = attack_zlg(diff_retrain, mean_p, mean_O, args.batch_size, num_classes)
-            preds_rt['rlu']  = attack_rlu_full(target_model, diff_retrain, aux_loader, args.batch_size, args.pretrain_lr, num_epochs= 1, num_classes = num_classes, device = device)
+            preds_rt['plus'] = attack_llg_plus(target_model, model_retrain, diff_ndiff_retraing, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_rt['zlg']  = attack_zlg(target_model, model_retrain, diff_retrain, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_rt['rlu']  = attack_rlu_full(target_model, model_retrain, diff_retrain, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
             preds_rt['rdm']  = create_balanced_labels(args.batch_size, num_classes)            
             preds_rt['mla']  = attack_mla(diff_retrain, batch_size=attack_batch_size, confident=confident_ng, num_classes=num_classes, approx=True)
 
