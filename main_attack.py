@@ -357,7 +357,7 @@ def main():
         elif (args.unlearned_algo == "neggradp"):
             print(f"   [NegGrad+] Retraining via Gradient Ascent (Chance Level Clamping)...")
             # Gọi hàm neggrad_unlearn (Các tham số như epochs, lr, alpha đã có default, 
-            model_ng = unlearner.neggrad_unlearn(retain_dataset, forget_dataset, target_indices, unlr = args.unlr , num_classes = num_classes )
+            model_ng = unlearner.neggrad_unlearn(retain_dataset, forget_dataset, target_indices, num_classes = num_classes )
             
             # Trích xuất độ lệch trọng số (Gradient/Weight Leakage)
             diff_ng = get_weight_difference(target_model, model_ng)

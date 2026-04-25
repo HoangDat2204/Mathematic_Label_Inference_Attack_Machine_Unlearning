@@ -12,6 +12,15 @@ from recovery.nn.custom_cnn import get_custom_model
 import time
 
 
+def l2_penalty(model,model_init,weight_decay):
+    l2_loss = 0
+    for (k,p),(k_init,p_init) in zip(model.named_parameters(),model_init.named_parameters()):
+        if p.requires_grad:
+            l2_loss += (p-p_init).pow(2).sum()
+    l2_loss *= (weight_decay/2.)
+    return l2_loss
+
+
 class DistillKL(nn.Module):
     """Kullback-Leibler Divergence với Temperature Scaling"""
     def __init__(self, T):
@@ -152,13 +161,13 @@ class Unlearner:
         # 1. GÁN CỨNG HYPERPARAMETERS CHUẨN SOTA
         # ==========================================
         T = 2           # Nhiệt độ làm mềm xác suất (Softmax Temperature)
-        alpha = 1.0       # Trọng số cho KL Divergence
+        alpha = 0.5       # Trọng số cho KL Divergence
         gamma = 1       # Trọng số cho Cross-Entropy (thường để rất nhỏ hoặc 0 để tin tưởng hoàn toàn vào Teacher)
-        msteps = 1        # Số lượng epoch cho phép phá hủy (Maximize). Nếu để quá cao, model sẽ hỏng hoàn toàn.
-        sgda_lr=unlr
+        msteps = 3        # Số lượng epoch cho phép phá hủy (Maximize). Nếu để quá cao, model sẽ hỏng hoàn toàn.
+        sgda_lr=0.001
         sgda_momentum = 0.9
         sgda_weight_decay = 0.1
-        epochs=4
+        epochs=10
         # ==========================================
         # 2. CHUẨN BỊ DATA LOADERS
         # ==========================================
@@ -184,7 +193,12 @@ class Unlearner:
         # ==========================================
         # Student: Bắt đầu từ mô hình đã nhiễm dữ liệu
         model_s = copy.deepcopy(self.target_model)
-        
+
+
+        module_list = nn.ModuleList([])
+        module_list.append(model_s)
+        trainable_list = nn.ModuleList([])
+        trainable_list.append(model_s)
         # Teacher: Mô hình chuẩn mực để tham chiếu. 
         # Trong SCRUB gốc, Teacher chính là target_model đóng băng. 
         # (Nếu thực nghiệm nâng cao, bạn có thể truyền self.base_model vào đây)
@@ -192,7 +206,7 @@ class Unlearner:
         model_t.eval() # Bắt buộc đóng băng Teacher
         
         # optimizer = optim.SGD(model_s.parameters(), lr=sgda_lr, momentum=sgda_momentum, weight_decay=sgda_weight_decay)
-        optimizer = optim.Adam(model_s.parameters(), lr=sgda_lr, weight_decay=sgda_weight_decay)
+        optimizer = optim.Adam(trainable_list.parameters(), lr=sgda_lr, weight_decay=sgda_weight_decay)
         
         criterion_div = DistillKL(T)
 
@@ -223,7 +237,7 @@ class Unlearner:
         return model_s
 
 
-    def neggrad_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, unlr =  0.001 ,num_classes=10):
+    def neggrad_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, num_classes=10):
         """
         NegGrad+ Unlearn với Chance Level Clamping.
         Đã cập nhật logic gộp (Merge) Dataset chuẩn xác.
@@ -231,28 +245,23 @@ class Unlearner:
         # ==========================================
         # 1. GÁN CỨNG HYPERPARAMETERS 
         # ==========================================
-        epochs=5
-        lr=unlr
+        epochs=10
+        lr=0.01
         alpha=0.8
-        
-        
         chance_level = -math.log(1.0 / num_classes)
-        
-         # ==========================================
+        weight_decay = 0.0
+        # ==========================================
         # 2. CHUẨN BỊ DATA LOADERS
         # ==========================================
-
         all_forget_indices = set(range(len(forget_dataset_base)))
-        remove_indices = set(indices_to_remove)
-        
+        remove_indices = set(indices_to_remove)  
         keep_in_forget_indices = list(all_forget_indices - remove_indices)
-        
         actual_forget_dataset = Subset(forget_dataset_base, list(remove_indices))        
         remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
+
         
         # C. Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
         actual_retain_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
-
         retain_loader = DataLoader(actual_retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
         forget_loader = DataLoader(actual_forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
 
@@ -262,7 +271,7 @@ class Unlearner:
         model = copy.deepcopy(self.target_model)
         model.train()
         
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
 
         print(f"   [NegGrad+] Khởi động với alpha={alpha} | Chance Level: {chance_level:.4f}")
         print(f"   [Data] Retain thực sự: {len(actual_retain_dataset)} mẫu | Forget thực sự: {len(actual_forget_dataset)} mẫu")
@@ -289,7 +298,7 @@ class Unlearner:
                 f_loss_clamped = torch.clamp(f_loss, max=chance_level)
 
                 # Công thức lõi
-                loss = alpha * r_loss - (1 - alpha) * f_loss_clamped
+                loss = alpha * (r_loss + l2_penalty(self.target_model, model, weight_decay ))   - (1 - alpha) * f_loss_clamped
 
                 loss.backward()
                 optimizer.step()
@@ -365,7 +374,7 @@ class Unlearner:
                 inputs, targets = inputs.to(device), targets.to(device)
                 
                 optimizer.zero_grad()
-                outputs,_ = model(inputs)
+                outputs = model(inputs)
                 loss =  self.criterion(outputs, targets)
                 loss.backward()
                 optimizer.step()
