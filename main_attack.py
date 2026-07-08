@@ -197,14 +197,14 @@ def main():
     print("="*60)
 
     # 1. Load Data & Models
-    retain_loader, forget_loader, _, num_channels, img_size, num_classes = get_dataloaders(args.dataset, batch_size=args.batch_size)
+    retain_loader, forget_loader, _, num_channels, img_size, num_classes = get_dataloaders(args.dataset)
     forget_dataset = forget_loader.dataset
     retain_dataset = retain_loader.dataset
     
     
     aux_loader = DataLoader(Subset(forget_dataset.dataset, list(range(args.aux_size))), batch_size=1, shuffle=False)
     target_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
-    base_model   = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
+    base_model = get_custom_model(args.model, num_channels, num_classes, img_size).to(device)
     base_model.load_state_dict(torch.load(os.path.join(Config.MODEL_SAVE_PATH, f"{args.model}_{args.dataset}_pretrained.pth")))
     target_model.load_state_dict(torch.load(os.path.join(Config.MODEL_SAVE_PATH, f"{args.model}_{args.dataset}_finetuned.pth")))
 
@@ -270,7 +270,6 @@ def main():
             preds = {}
             preds['llg']  = attack_llg(diff_approx, num_classes, args.batch_size)
             preds['plus'] = attack_llg_plus(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
-            print("HELLO")
             preds['zlg']  = attack_zlg(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
             preds['rlu']  = attack_rlu_full(target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
             preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, confident = confident_approx,num_classes=num_classes)
@@ -320,19 +319,10 @@ def main():
             for m in preds_ft: results['finetune'][m] += compute_batch_accuracy(true_labels, preds_ft[m])
             
         elif (args.unlearned_algo == "scrub"):
-
-        # --- C. SCRUB ---
             print(f"   [SCRUB] Retraining via Alternating Min-Max Distillation...")
-            
-            # Gọi hàm scrub_unlearn với cấu hình SOTA đã gán cứng bên trong
             model_scrub = unlearner.scrub_unlearn(retain_dataset, forget_dataset, target_indices, unlr = args.unlr)
-            
-            # Trích xuất độ lệch trọng số (Gradient/Weight Leakage)
             diff_scrub = get_weight_difference(target_model, model_scrub)
             confident_scrub = compute_overlap_metric(diff_scrub, target_model, num_classes)
-            
-            
-            # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_sc = {}
             preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
             preds_sc['plus'] = attack_llg_plus(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)

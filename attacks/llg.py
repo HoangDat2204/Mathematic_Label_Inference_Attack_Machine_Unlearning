@@ -8,73 +8,54 @@ def attack_llg(proxy_gradients, num_classes=10, batch_size=1):
     Tuân thủ Property 1: Gradient của target class là số ÂM.
     
     Quy trình:
-    1. Lấy Gradient Vector (Bias hoặc Weight sum).
-    2. Ước lượng impact 'm' từ các giá trị âm.
-    3. Lặp batch_size lần: Tìm min, thêm label, trừ impact.
+    1. Lấy Gradient Vector (Ưu tiên Bias hoặc Weight sum).
+    2. Ước lượng impact 'new_impact' từ các giá trị âm.
+    3. Trích xuất nhãn qua 2 giai đoạn (Giai đoạn âm và Giai đoạn argmin).
     """
     
     # --- BƯỚC 1: TRÍCH XUẤT GRADIENT VECTOR ---
     target_grad = None
-    
-    # Ưu tiên 1: Bias Gradient (Property 1 thể hiện rõ nhất ở Bias: p - y)
-    # for name in reversed(list(proxy_gradients.keys())):
-    #     if 'bias' in name and proxy_gradients[name].shape[0] == num_classes:
-    #         target_grad = proxy_gradients[name].detach().clone()
-    #         break
             
-    # Ưu tiên 2: Weight Gradient (Sum over features)
-    if target_grad is None:
-        for name in reversed(list(proxy_gradients.keys())):
-            if 'weight' in name and len(proxy_gradients[name].shape) == 2:
-                if proxy_gradients[name].shape[0] == num_classes:
-                    # Sum theo chiều feature để ra vector [num_classes]
-                    # Lý do: Property 1 phát biểu trên dot product w*h, sum lại bảo toàn dấu
-                    target_grad = torch.sum(proxy_gradients[name], dim=1).detach().clone()
-                    break
-    
+    for name in reversed(list(proxy_gradients.keys())):
+        if 'weight' in name and len(proxy_gradients[name].shape) == 2:
+            if proxy_gradients[name].shape[0] == num_classes:
+                target_grad = torch.sum(proxy_gradients[name], dim=-1).detach().clone()
+                break
+
     if target_grad is None:
         return []
 
-    # --- BƯỚC 2: XỬ LÝ DẤU (SIGN CORRECTION) ---
-    gradients = target_grad 
+    # --- BƯỚC 2: SAO CHÉP GRADIENT ĐỂ XỬ LÝ ---
+    gradients = target_grad.clone()
 
-    # --- BƯỚC 3: THUẬT TOÁN 1 (ITERATIVE REMOVAL) ---
-    predicted_labels = []
+    # --- BƯỚC 3: THUẬT TOÁN LLG_ATTACK ---
+    h1_extraction = []
+    negative_gradient = 0.0
     
-    # 3a. Ước lượng tham số impact 'm' (mean impact parameter)
-    # Theo bài báo: m được ước lượng bằng trung bình của các gradient âm (confirmed targets)
-    # Tìm các phần tử âm
-    negative_indices = torch.where(gradients < 0)[0]
+    for i_cg, class_gradient in enumerate(gradients):
+        if class_gradient < 0:
+            h1_extraction.append((i_cg, class_gradient.item()))
+            negative_gradient += class_gradient.item()
     
-    if len(negative_indices) > 0:
-        # Sửa đoạn tính m trong llg.py
-        sum_neg = torch.sum(gradients[negative_indices])
-        # Giả sử num_classes = 10, batch_size là input
-        m = (sum_neg / batch_size) * (1 + 1/num_classes)
+    # Tính toán giá trị impact dựa trên tổng gradient âm thu được
+    if batch_size > 0:
+        new_impact = (1 + 1 / num_classes) * (negative_gradient / batch_size)
     else:
-        # Fallback: Nếu nhiễu quá lớn khiến không có số âm nào (hiếm gặp trong Unlearning chuẩn)
-        # Ta lấy giá trị nhỏ nhất làm m
-        m = torch.min(gradients)
+        new_impact = 0.0
+        
+    predicted_labels = []
 
-    # Đảm bảo m luôn âm để phép trừ impact hoạt động đúng logic (trừ số âm = cộng dương)
-    if m > 0: m = -m 
-    # 3b. Vòng lặp trích xuất (Iterative Extraction)
-    # Copy để không ảnh hưởng dữ liệu gốc
-    g_iter = gradients.clone()
-    
-    for _ in range(batch_size):
-        # 1. Tìm nhãn i có gradient nhỏ nhất (Min - Âm nhất)
-        # Property 1: Target labels have negative gradients
-        min_val, min_idx = torch.min(g_iter, dim=0)
-        idx = min_idx.item()
-        
-        # 2. Ghi nhận nhãn
-        predicted_labels.append(idx)
-        
-        # 3. Cập nhật gradient: g_i = g_i - m
-        # Vì m là số âm (đại diện cho impact của 1 sample),
-        # Trừ đi m tức là cộng một lượng dương -> Làm g_i tiến về 0 hoặc dương
-        # Điều này mô phỏng việc "gỡ bỏ" 1 sample khỏi gradient tổng hợp
-        g_iter[idx] = g_iter[idx] - m
-        
+    # Giai đoạn 1: Thêm các class có gradient âm vào danh sách dự đoán
+    for (i_c, _) in h1_extraction:
+        predicted_labels.append(i_c)
+        gradients[i_c] = gradients[i_c] - new_impact
+
+    # Giai đoạn 2: Điền thêm các nhãn còn thiếu cho đủ batch_size bằng phương pháp tìm argmin lặp lại
+    remaining_slots = batch_size - len(predicted_labels)
+    for _ in range(remaining_slots):
+        min_id = torch.argmin(gradients).item()
+        predicted_labels.append(min_id)
+        # Cập nhật lại gradient sau khi chọn nhãn bằng cách trừ đi new_impact
+        gradients[min_id] = gradients[min_id] - new_impact
+
     return sorted(predicted_labels)

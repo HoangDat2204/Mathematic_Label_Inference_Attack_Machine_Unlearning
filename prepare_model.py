@@ -61,6 +61,9 @@ def test(model, loader, criterion, device):
             
     return running_loss / len(loader), 100. * correct / total
 
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Phase 1: Prepare Target Model for Unlearning Attack')
     parser.add_argument('--dataset', default='cifar10', type=str, help='cifar10, cifar100, mnist')

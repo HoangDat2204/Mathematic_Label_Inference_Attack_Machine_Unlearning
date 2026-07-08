@@ -95,15 +95,15 @@ def attack_llg_plus(original_model, unlearned_model, proxy_gradients, lr ,aux_lo
         if 'weight' in name and len(proxy_gradients[name].shape) == 2:
             if proxy_gradients[name].shape[0] == num_classes:
                 w_grad = proxy_gradients[name]
-                grad_vector = torch.sum(w_grad,  dim=-1).detach().clone()
+                grad_vector = torch.sum(w_grad, dim=-1).detach().clone()
                 break
 
     h1_extraction = []
     gradients_for_prediction = grad_vector/lr
 
     for i_cg, class_gradient in enumerate(gradients_for_prediction):
-                    if class_gradient < 0:
-                        h1_extraction.append((i_cg, class_gradient))
+        if class_gradient < 0:
+            h1_extraction.append((i_cg, class_gradient))
 
     gradients_for_prediction -= new_offset
     prediction = []
