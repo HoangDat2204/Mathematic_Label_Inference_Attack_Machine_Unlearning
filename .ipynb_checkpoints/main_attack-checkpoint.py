@@ -265,7 +265,9 @@ def main():
     
 
     parser.add_argument('--unlr', default=0.01, type=float)
-    
+    parser.add_argument('--mini_batch_size', default=256, type=int)
+    parser.add_argument('--local_loops', default=1, type=int)
+
     #Hypeparameter for Retrain
     parser.add_argument('--pretrain_lr', default=0.01, type=float)
     parser.add_argument('--pretrain_epochs', default=1, type=int)
@@ -287,7 +289,7 @@ def main():
     print("="*60)
 
     # 1. Load Data & Models
-    retain_loader, forget_loader, _, num_channels, img_size, num_classes = get_dataloaders(args.dataset)
+    retain_loader, forget_loader, test_loader, num_channels, img_size, num_classes = get_dataloaders(args.dataset)
     forget_dataset = forget_loader.dataset
     retain_dataset = retain_loader.dataset
     
@@ -328,6 +330,11 @@ def main():
     results = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
     results_class = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
     # Vòng lặp thí nghiệm
+    acc_retain_after = 0
+    acc_test_after = 0
+    acc_rem_forget_after = 0
+    acc_batch_after = 0
+    acc_batch_before = 0
     for loop in range(args.total_loops):
         print(f"\n>>> Loop {loop+1}/{args.total_loops} (Alpha={args.alpha})")
 
@@ -348,14 +355,33 @@ def main():
         batch_input = [(images, labels)]
         # --- A. APPROXIMATE ---
         # predict_single_image_with_prob(target_model, images[0], labels[0], device)
-
+   
         if (args.unlearned_algo == "neggrad"):
             # Load Batch Data
            
 
-            model_approx = unlearner.approximate_unlearn(batch_input, lr=args.unlr)
+            model_approx, acc_retain_after_epoch, acc_test_after_epoch, acc_rem_forget_after_epoch, acc_batch_after_epoch, acc_batch_before_epoch = unlearner.approximate_unlearn(
+                list_of_batches=batch_input,
+                retain_loader=retain_loader,
+                test_loader=test_loader,
+                forget_dataset=forget_dataset,
+                target_indices=target_indices,
+                lr=args.unlr
+            )
+            acc_retain_after += acc_retain_after_epoch
+            acc_test_after += acc_test_after_epoch
+            acc_rem_forget_after += acc_rem_forget_after_epoch
+            acc_batch_after += acc_batch_after_epoch
+            acc_batch_before += acc_batch_before_epoch
+
+            # model_approx = unlearner.approximate_unlearn(
+            #     list_of_batches=batch_input,
+            #     lr=args.unlr
+            # )
+            
             diff_approx = get_weight_difference(target_model, model_approx)
             
+       
 
             confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
             preds = {}
@@ -545,6 +571,10 @@ def main():
         name = "MLA (Ours)" if m.upper() == "MLA" else m.upper()
         print(f"{name:<10} | {avg_ap_class:10.2f}% | {avg_ex_class:10.2f}% | {avg_sc_class:10.2f}%  | {avg_neg_class:10.2f}% | {avg_rt_class:10.2f}%")
     print("="*60)
+    
+
+    print(f"{'Acc retain':<10} | {'Acc test':<11} | {'Acc Finetune':<11} | {'Acc forget':<11}| {'Acc forget before':<11}  " )
+    print(f"{acc_retain_after / args.total_loops :<10} | {acc_test_after / args.total_loops :10.2f}% | {acc_rem_forget_after / args.total_loops :10.2f}% | {acc_batch_after / args.total_loops:10.2f}% | {acc_batch_before / args.total_loops:10.2f}%")
 
 if __name__ == '__main__':
     main()

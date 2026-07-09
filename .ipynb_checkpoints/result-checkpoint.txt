@@ -1,0 +1,779 @@
+[Info] Random Seed set to: 0
+============================================================
+BENCHMARK: 6 Attacks (LLG, LLG+, ZLG, RLU, MLA)
+Config: Batch=64 | Alpha=0.5 | Loops=100
+============================================================
+Dataset: cifar10 | Image Size: 32x32
+Retain Size: 40000 | Forget/Finetune Size: 10000
+Initializing ResNet18 for input 32x32, ch=3
+Initializing ResNet18 for input 32x32, ch=3
+[Prep] Grouping indices by class for Alpha sampling...
+
+>>> Loop 1/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+MAX P:  0.9943557
+Boost factor:  1.016933
+[Approx] LLG: | 65.6% | 28.6% |Plus: 60.9% |  14.3% | ZLG: 62.5% | 28.6% |RLU: 62.5% |28.6% |RDM: 48.4% | 70.0% |MLA: 67.2% |  28.6% |
+
+>>> Loop 2/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+MAX P:  0.8779813
+Boost factor:  1.3660561
+[Approx] LLG: | 68.8% | 25.0% |Plus: 54.7% |  25.0% | ZLG: 68.8% | 25.0% |RLU: 65.6% |25.0% |RDM: 48.4% | 80.0% |MLA: 84.4% |  87.5% |
+
+>>> Loop 3/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+MAX P:  0.40909597
+Boost factor:  2.772712
+[Approx] LLG: | 78.1% | 42.9% |Plus: 70.3% |  42.9% | ZLG: 78.1% | 42.9% |RLU: 73.4% |42.9% |RDM: 53.1% | 70.0% |MLA: 78.1% |  70.0% |
+
+>>> Loop 4/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+MAX P:  0.8498037
+Boost factor:  1.450589
+[Approx] LLG: | 84.4% | 75.0% |Plus: 68.8% |  75.0% | ZLG: 82.8% | 75.0% |RLU: 81.2% |75.0% |RDM: 34.4% | 40.0% |MLA: 90.6% |  66.7% |
+
+>>> Loop 5/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+MAX P:  0.6379561
+Boost factor:  2.0861318
+[Approx] LLG: | 84.4% | 50.0% |Plus: 50.0% |  50.0% | ZLG: 82.8% | 50.0% |RLU: 79.7% |50.0% |RDM: 42.2% | 60.0% |MLA: 85.9% |  66.7% |
+
+>>> Loop 6/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 5
+[Info] Random Seed set to: 0
+============================================================
+BENCHMARK: 6 Attacks (LLG, LLG+, ZLG, RLU, MLA)
+Config: Batch=64 | Alpha=0.5 | Loops=100
+============================================================
+Dataset: cifar10 | Image Size: 32x32
+Retain Size: 40000 | Forget/Finetune Size: 10000
+Initializing ResNet18 for input 32x32, ch=3
+Initializing ResNet18 for input 32x32, ch=3
+[Prep] Grouping indices by class for Alpha sampling...
+
+>>> Loop 1/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 65.6% | 42.9% |Plus: 60.9% |  14.3% | ZLG: 81.2% | 85.7% |RLU: 68.8% |42.9% |RDM: 48.4% | 70.0% |MLA: 65.6% |  28.6% |
+
+>>> Loop 2/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8771147
+Boost factor:  1.3686559
+[Approx] LLG: | 70.3% | 25.0% |Plus: 54.7% |  25.0% | ZLG: 79.7% | 62.5% |RLU: 70.3% |37.5% |RDM: 48.4% | 80.0% |MLA: 79.7% |  77.8% |
+
+>>> Loop 3/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.42403287
+Boost factor:  2.7279015
+[Approx] LLG: | 75.0% | 42.9% |Plus: 76.6% |  55.6% | ZLG: 71.9% | 60.0% |RLU: 57.8% |55.6% |RDM: 53.1% | 70.0% |MLA: 71.9% |  60.0% |
+
+>>> Loop 4/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8568618
+Boost factor:  1.4294145
+[Approx] LLG: | 84.4% | 75.0% |Plus: 68.8% |  75.0% | ZLG: 90.6% | 60.0% |RLU: 84.4% |60.0% |RDM: 34.4% | 40.0% |MLA: 90.6% |  57.1% |
+
+>>> Loop 5/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6250312
+Boost factor:  2.1249065
+[Approx] LLG: | 85.9% | 66.7% |Plus: 68.8% |  50.0% | ZLG: 92.2% | 66.7% |RLU: 79.7% |50.0% |RDM: 42.2% | 60.0% |MLA: 84.4% |  66.7% |
+
+>>> Loop 6/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.4315696
+Boost factor:  2.7052913
+[Approx] LLG: | 81.2% | 71.4% |Plus: 78.1% |  57.1% | ZLG: 87.5% | 62.5% |RLU: 73.4% |71.4% |RDM: 54.7% | 70.0% |MLA: 82.8% |  60.0% |
+
+>>> Loop 7/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.40649185
+Boost factor:  2.7805245
+[Approx] LLG: | 84.4% | 83.3% |Plus: 85.9% |  83.3% | ZLG: 90.6% | 75.0% |RLU: 82.8% |71.4% |RDM: 53.1% | 60.0% |MLA: 84.4% |  60.0% |
+
+>>> Loop 8/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6818677
+Boost factor:  1.9543968
+[Approx] LLG: | 79.7% | 28.6% |Plus: 76.6% |  28.6% | ZLG: 89.1% | 50.0% |RLU: 81.2% |42.9% |RDM: 39.1% | 70.0% |MLA: 81.2% |  66.7% |
+
+>>> Loop 9/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.53058374
+Boost factor:  2.408249
+[Approx] LLG: | 53.1% | 40.0% |Plus: 81.2% |  80.0% | ZLG: 84.4% | 100.0% |RLU: 59.4% |70.0% |RDM: 81.2% | 100.0% |MLA: 76.6% |  70.0% |
+
+>>> Loop 10/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.85610414
+Boost factor:  1.4316876
+[Approx] LLG: | 75.0% | 60.0% |Plus: 59.4% |  40.0% | ZLG: 84.4% | 80.0% |RLU: 78.1% |50.0% |RDM: 37.5% | 50.0% |MLA: 87.5% |  57.1% |
+
+>>> Loop 11/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9726989
+Boost factor:  1.0819032
+[Approx] LLG: | 64.1% | 57.1% |Plus: 54.7% |  57.1% | ZLG: 92.2% | 85.7% |RLU: 67.2% |50.0% |RDM: 53.1% | 70.0% |MLA: 64.1% |  57.1% |
+
+>>> Loop 12/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.93109643
+Boost factor:  1.2067107
+[Approx] LLG: | 64.1% | 44.4% |Plus: 62.5% |  44.4% | ZLG: 87.5% | 60.0% |RLU: 71.9% |55.6% |RDM: 57.8% | 90.0% |MLA: 70.3% |  44.4% |
+
+>>> Loop 13/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8036695
+Boost factor:  1.5889914
+[Approx] LLG: | 71.9% | 50.0% |Plus: 62.5% |  37.5% | ZLG: 87.5% | 66.7% |RLU: 75.0% |50.0% |RDM: 53.1% | 80.0% |MLA: 85.9% |  66.7% |
+
+>>> Loop 14/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.544035
+Boost factor:  2.3678951
+[Approx] LLG: | 71.9% | 37.5% |Plus: 68.8% |  37.5% | ZLG: 84.4% | 70.0% |RLU: 78.1% |62.5% |RDM: 57.8% | 80.0% |MLA: 82.8% |  70.0% |
+
+>>> Loop 15/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.51514745
+Boost factor:  2.4545577
+[Approx] LLG: | 57.8% | 50.0% |Plus: 70.3% |  55.6% | ZLG: 79.7% | 88.9% |RLU: 64.1% |62.5% |RDM: 62.5% | 80.0% |MLA: 84.4% |  77.8% |
+
+>>> Loop 16/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.7558033
+Boost factor:  1.7325902
+[Approx] LLG: | 67.2% | 42.9% |Plus: 64.1% |  28.6% | ZLG: 87.5% | 100.0% |RLU: 62.5% |42.9% |RDM: 50.0% | 70.0% |MLA: 82.8% |  77.8% |
+
+>>> Loop 17/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.59816563
+Boost factor:  2.205503
+[Approx] LLG: | 81.2% | 80.0% |Plus: 71.9% |  80.0% | ZLG: 92.2% | 83.3% |RLU: 75.0% |66.7% |RDM: 46.9% | 50.0% |MLA: 84.4% |  55.6% |
+
+>>> Loop 18/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.63377184
+Boost factor:  2.0986845
+[Approx] LLG: | 79.7% | 42.9% |Plus: 70.3% |  42.9% | ZLG: 85.9% | 62.5% |RLU: 76.6% |42.9% |RDM: 40.6% | 70.0% |MLA: 79.7% |  66.7% |
+
+>>> Loop 19/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6817133
+Boost factor:  1.9548602
+[Approx] LLG: | 78.1% | 42.9% |Plus: 68.8% |  28.6% | ZLG: 85.9% | 50.0% |RLU: 76.6% |50.0% |RDM: 39.1% | 70.0% |MLA: 81.2% |  77.8% |
+
+>>> Loop 20/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.72655416
+Boost factor:  1.8203375
+[Approx] LLG: | 78.1% | 80.0% |Plus: 62.5% |  60.0% | ZLG: 85.9% | 100.0% |RLU: 78.1% |66.7% |RDM: 39.1% | 50.0% |MLA: 84.4% |  62.5% |
+
+>>> Loop 21/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.536786
+Boost factor:  2.389642
+[Approx] LLG: | 67.2% | 37.5% |Plus: 68.8% |  37.5% | ZLG: 87.5% | 66.7% |RLU: 71.9% |44.4% |RDM: 54.7% | 80.0% |MLA: 84.4% |  70.0% |
+
+>>> Loop 22/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.48226967
+Boost factor:  2.5531912
+[Approx] LLG: | 75.0% | 50.0% |Plus: 82.8% |  62.5% | ZLG: 89.1% | 60.0% |RLU: 78.1% |75.0% |RDM: 59.4% | 80.0% |MLA: 90.6% |  80.0% |
+
+>>> Loop 23/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.887994
+Boost factor:  1.3360181
+[Approx] LLG: | 70.3% | 50.0% |Plus: 56.2% |  50.0% | ZLG: 82.8% | 75.0% |RLU: 75.0% |66.7% |RDM: 48.4% | 60.0% |MLA: 78.1% |  62.5% |
+
+>>> Loop 24/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9516241
+Boost factor:  1.1451278
+[Approx] LLG: | 64.1% | 60.0% |Plus: 53.1% |  40.0% | ZLG: 78.1% | 71.4% |RLU: 76.6% |80.0% |RDM: 46.9% | 50.0% |MLA: 67.2% |  57.1% |
+
+>>> Loop 25/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5773972
+Boost factor:  2.2678084
+[Approx] LLG: | 71.9% | 37.5% |Plus: 68.8% |  37.5% | ZLG: 87.5% | 77.8% |RLU: 75.0% |50.0% |RDM: 48.4% | 80.0% |MLA: 85.9% |  77.8% |
+
+>>> Loop 26/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8816323
+Boost factor:  1.355103
+[Approx] LLG: | 67.2% | 37.5% |Plus: 53.1% |  37.5% | ZLG: 79.7% | 40.0% |RLU: 71.9% |50.0% |RDM: 56.2% | 80.0% |MLA: 79.7% |  62.5% |
+
+>>> Loop 27/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6587513
+Boost factor:  2.023746
+[Approx] LLG: | 71.9% | 33.3% |Plus: 75.0% |  33.3% | ZLG: 90.6% | 77.8% |RLU: 71.9% |33.3% |RDM: 53.1% | 90.0% |MLA: 90.6% |  80.0% |
+
+>>> Loop 28/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.96163595
+Boost factor:  1.1150922
+[Approx] LLG: | 71.9% | 28.6% |Plus: 67.2% |  28.6% | ZLG: 81.2% | 71.4% |RLU: 78.1% |42.9% |RDM: 42.2% | 70.0% |MLA: 76.6% |  57.1% |
+
+>>> Loop 29/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.40164694
+Boost factor:  2.7950592
+[Approx] LLG: | 81.2% | 66.7% |Plus: 84.4% |  83.3% | ZLG: 87.5% | 75.0% |RLU: 75.0% |71.4% |RDM: 51.6% | 60.0% |MLA: 82.8% |  66.7% |
+
+>>> Loop 30/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5095655
+Boost factor:  2.4713035
+[Approx] LLG: | 78.1% | 28.6% |Plus: 78.1% |  28.6% | ZLG: 87.5% | 62.5% |RLU: 78.1% |28.6% |RDM: 40.6% | 70.0% |MLA: 76.6% |  70.0% |
+
+>>> Loop 31/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.36931333
+Boost factor:  2.8920598
+[Approx] LLG: | 70.3% | 50.0% |Plus: 73.4% |  50.0% | ZLG: 78.1% | 80.0% |RLU: 57.8% |75.0% |RDM: 65.6% | 80.0% |MLA: 76.6% |  70.0% |
+
+>>> Loop 32/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6101593
+Boost factor:  2.1695223
+[Approx] LLG: | 68.8% | 66.7% |Plus: 78.1% |  77.8% | ZLG: 84.4% | 90.0% |RLU: 67.2% |77.8% |RDM: 62.5% | 90.0% |MLA: 79.7% |  77.8% |
+
+>>> Loop 33/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.44725382
+Boost factor:  2.6582386
+[Approx] LLG: | 79.7% | 44.4% |Plus: 73.4% |  44.4% | ZLG: 93.8% | 88.9% |RLU: 78.1% |55.6% |RDM: 56.2% | 90.0% |MLA: 87.5% |  90.0% |
+
+>>> Loop 34/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6291806
+Boost factor:  2.1124582
+[Approx] LLG: | 67.2% | 37.5% |Plus: 65.6% |  25.0% | ZLG: 81.2% | 66.7% |RLU: 75.0% |37.5% |RDM: 54.7% | 80.0% |MLA: 85.9% |  88.9% |
+
+>>> Loop 35/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9432624
+Boost factor:  1.1702127
+[Approx] LLG: | 65.6% | 57.1% |Plus: 56.2% |  42.9% | ZLG: 89.1% | 71.4% |RLU: 64.1% |71.4% |RDM: 51.6% | 70.0% |MLA: 75.0% |  71.4% |
+
+>>> Loop 36/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.7738644
+Boost factor:  1.6784068
+[Approx] LLG: | 76.6% | 42.9% |Plus: 60.9% |  42.9% | ZLG: 87.5% | 62.5% |RLU: 75.0% |42.9% |RDM: 46.9% | 70.0% |MLA: 85.9% |  77.8% |
+
+>>> Loop 37/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.41169813
+Boost factor:  2.764906
+[Approx] LLG: | 93.8% | 50.0% |Plus: 93.8% |  50.0% | ZLG: 89.1% | 33.3% |RLU: 82.8% |50.0% |RDM: 35.9% | 60.0% |MLA: 67.2% |  60.0% |
+
+>>> Loop 38/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.34567025
+Boost factor:  2.9629893
+[Approx] LLG: | 73.4% | 42.9% |Plus: 78.1% |  71.4% | ZLG: 85.9% | 87.5% |RLU: 78.1% |71.4% |RDM: 54.7% | 70.0% |MLA: 84.4% |  70.0% |
+
+>>> Loop 39/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.822072
+Boost factor:  1.5337839
+[Approx] LLG: | 75.0% | 37.5% |Plus: 59.4% |  37.5% | ZLG: 89.1% | 100.0% |RLU: 75.0% |62.5% |RDM: 46.9% | 80.0% |MLA: 87.5% |  87.5% |
+
+>>> Loop 40/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 81.2% | 60.0% |Plus: 75.0% |  20.0% | ZLG: 87.5% | 57.1% |RLU: 78.1% |40.0% |RDM: 34.4% | 50.0% |MLA: 81.2% |  60.0% |
+
+>>> Loop 41/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.89814454
+Boost factor:  1.3055663
+[Approx] LLG: | 67.2% | 66.7% |Plus: 56.2% |  66.7% | ZLG: 81.2% | 62.5% |RLU: 73.4% |71.4% |RDM: 40.6% | 60.0% |MLA: 81.2% |  66.7% |
+
+>>> Loop 42/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.37598795
+Boost factor:  2.8720362
+[Approx] LLG: | 87.5% | 83.3% |Plus: 82.8% |  83.3% | ZLG: 87.5% | 62.5% |RLU: 78.1% |83.3% |RDM: 53.1% | 60.0% |MLA: 82.8% |  60.0% |
+
+>>> Loop 43/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.7646233
+Boost factor:  1.7061301
+[Approx] LLG: | 67.2% | 37.5% |Plus: 62.5% |  37.5% | ZLG: 81.2% | 75.0% |RLU: 73.4% |50.0% |RDM: 53.1% | 80.0% |MLA: 84.4% |  77.8% |
+
+>>> Loop 44/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.84221643
+Boost factor:  1.4733508
+[Approx] LLG: | 70.3% | 80.0% |Plus: 59.4% |  60.0% | ZLG: 85.9% | 71.4% |RLU: 64.1% |57.1% |RDM: 42.2% | 50.0% |MLA: 79.7% |  57.1% |
+
+>>> Loop 45/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 68.8% | 37.5% |Plus: 64.1% |  12.5% | ZLG: 79.7% | 62.5% |RLU: 68.8% |37.5% |RDM: 45.3% | 80.0% |MLA: 68.8% |  37.5% |
+
+>>> Loop 46/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.55431473
+Boost factor:  2.3370557
+[Approx] LLG: | 81.2% | 57.1% |Plus: 70.3% |  57.1% | ZLG: 87.5% | 71.4% |RLU: 73.4% |57.1% |RDM: 51.6% | 70.0% |MLA: 82.8% |  77.8% |
+
+>>> Loop 47/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.564963
+Boost factor:  2.305111
+[Approx] LLG: | 81.2% | 42.9% |Plus: 73.4% |  42.9% | ZLG: 82.8% | 71.4% |RLU: 82.8% |50.0% |RDM: 43.8% | 70.0% |MLA: 79.7% |  70.0% |
+
+>>> Loop 48/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9110943
+Boost factor:  1.2667171
+[Approx] LLG: | 68.8% | 42.9% |Plus: 54.7% |  42.9% | ZLG: 85.9% | 85.7% |RLU: 65.6% |42.9% |RDM: 42.2% | 70.0% |MLA: 76.6% |  85.7% |
+
+>>> Loop 49/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.51129484
+Boost factor:  2.4661155
+[Approx] LLG: | 87.5% | 60.0% |Plus: 79.7% |  60.0% | ZLG: 93.8% | 80.0% |RLU: 76.6% |60.0% |RDM: 39.1% | 50.0% |MLA: 71.9% |  50.0% |
+
+>>> Loop 50/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 79.7% | 28.6% |Plus: 75.0% |  14.3% | ZLG: 87.5% | 71.4% |RLU: 76.6% |25.0% |RDM: 32.8% | 70.0% |MLA: 79.7% |  42.9% |
+
+>>> Loop 51/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.772485
+Boost factor:  1.682545
+[Approx] LLG: | 64.1% | 57.1% |Plus: 79.7% |  100.0% | ZLG: 85.9% | 87.5% |RLU: 73.4% |85.7% |RDM: 60.9% | 70.0% |MLA: 82.8% |  100.0% |
+
+>>> Loop 52/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9927787
+Boost factor:  1.0216639
+[Approx] LLG: | 67.2% | 28.6% |Plus: 64.1% |  28.6% | ZLG: 78.1% | 50.0% |RLU: 78.1% |42.9% |RDM: 43.8% | 70.0% |MLA: 70.3% |  42.9% |
+
+>>> Loop 53/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.32715803
+Boost factor:  3.0185258
+[Approx] LLG: | 75.0% | 62.5% |Plus: 79.7% |  75.0% | ZLG: 87.5% | 88.9% |RLU: 73.4% |75.0% |RDM: 67.2% | 80.0% |MLA: 89.1% |  100.0% |
+
+>>> Loop 54/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5369503
+Boost factor:  2.3891492
+[Approx] LLG: | 81.2% | 71.4% |Plus: 90.6% |  71.4% | ZLG: 84.4% | 60.0% |RLU: 76.6% |75.0% |RDM: 51.6% | 70.0% |MLA: 89.1% |  60.0% |
+
+>>> Loop 55/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.47646978
+Boost factor:  2.570591
+[Approx] LLG: | 85.9% | 66.7% |Plus: 79.7% |  66.7% | ZLG: 93.8% | 71.4% |RLU: 89.1% |57.1% |RDM: 48.4% | 60.0% |MLA: 82.8% |  60.0% |
+
+>>> Loop 56/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.98410094
+Boost factor:  1.0476972
+[Approx] LLG: | 54.7% | 22.2% |Plus: 54.7% |  33.3% | ZLG: 85.9% | 88.9% |RLU: 64.1% |33.3% |RDM: 56.2% | 90.0% |MLA: 57.8% |  44.4% |
+
+>>> Loop 57/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5516631
+Boost factor:  2.3450108
+[Approx] LLG: | 76.6% | 62.5% |Plus: 84.4% |  75.0% | ZLG: 87.5% | 60.0% |RLU: 82.8% |66.7% |RDM: 56.2% | 80.0% |MLA: 90.6% |  70.0% |
+
+>>> Loop 58/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.9176674
+Boost factor:  1.2469978
+[Approx] LLG: | 68.8% | 37.5% |Plus: 56.2% |  37.5% | ZLG: 85.9% | 75.0% |RLU: 65.6% |50.0% |RDM: 45.3% | 80.0% |MLA: 78.1% |  50.0% |
+
+>>> Loop 59/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.7646906
+Boost factor:  1.7059283
+[Approx] LLG: | 76.6% | 60.0% |Plus: 64.1% |  40.0% | ZLG: 85.9% | 71.4% |RLU: 78.1% |50.0% |RDM: 37.5% | 50.0% |MLA: 84.4% |  55.6% |
+
+>>> Loop 60/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.51886755
+Boost factor:  2.4433975
+[Approx] LLG: | 70.3% | 37.5% |Plus: 67.2% |  25.0% | ZLG: 82.8% | 75.0% |RLU: 68.8% |33.3% |RDM: 50.0% | 80.0% |MLA: 82.8% |  80.0% |
+
+>>> Loop 61/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.45265484
+Boost factor:  2.6420355
+[Approx] LLG: | 71.9% | 37.5% |Plus: 75.0% |  37.5% | ZLG: 84.4% | 70.0% |RLU: 75.0% |62.5% |RDM: 53.1% | 80.0% |MLA: 82.8% |  70.0% |
+
+>>> Loop 62/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.792111
+Boost factor:  1.623667
+[Approx] LLG: | 70.3% | 50.0% |Plus: 73.4% |  62.5% | ZLG: 87.5% | 60.0% |RLU: 79.7% |62.5% |RDM: 62.5% | 80.0% |MLA: 85.9% |  75.0% |
+
+>>> Loop 63/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.680288
+Boost factor:  1.959136
+[Approx] LLG: | 73.4% | 66.7% |Plus: 70.3% |  66.7% | ZLG: 81.2% | 55.6% |RLU: 68.8% |57.1% |RDM: 56.2% | 60.0% |MLA: 84.4% |  55.6% |
+
+>>> Loop 64/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5101469
+Boost factor:  2.4695592
+[Approx] LLG: | 71.9% | 33.3% |Plus: 71.9% |  33.3% | ZLG: 81.2% | 57.1% |RLU: 71.9% |33.3% |RDM: 45.3% | 60.0% |MLA: 76.6% |  60.0% |
+
+>>> Loop 65/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8019298
+Boost factor:  1.5942106
+[Approx] LLG: | 75.0% | 50.0% |Plus: 62.5% |  50.0% | ZLG: 90.6% | 60.0% |RLU: 73.4% |62.5% |RDM: 46.9% | 80.0% |MLA: 87.5% |  66.7% |
+
+>>> Loop 66/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.88404346
+Boost factor:  1.3478696
+[Approx] LLG: | 65.6% | 37.5% |Plus: 57.8% |  25.0% | ZLG: 85.9% | 75.0% |RLU: 65.6% |37.5% |RDM: 53.1% | 80.0% |MLA: 79.7% |  75.0% |
+
+>>> Loop 67/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5422205
+Boost factor:  2.3733387
+[Approx] LLG: | 68.8% | 37.5% |Plus: 78.1% |  62.5% | ZLG: 90.6% | 80.0% |RLU: 78.1% |62.5% |RDM: 59.4% | 80.0% |MLA: 87.5% |  70.0% |
+
+>>> Loop 68/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.35938704
+Boost factor:  2.921839
+[Approx] LLG: | 79.7% | 71.4% |Plus: 90.6% |  85.7% | ZLG: 85.9% | 77.8% |RLU: 76.6% |85.7% |RDM: 56.2% | 70.0% |MLA: 87.5% |  77.8% |
+
+>>> Loop 69/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.91752416
+Boost factor:  1.2474275
+[Approx] LLG: | 62.5% | 50.0% |Plus: 71.9% |  50.0% | ZLG: 84.4% | 70.0% |RLU: 82.8% |55.6% |RDM: 54.7% | 80.0% |MLA: 70.3% |  44.4% |
+
+>>> Loop 70/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.571914
+Boost factor:  2.284258
+[Approx] LLG: | 76.6% | 50.0% |Plus: 68.8% |  50.0% | ZLG: 84.4% | 87.5% |RLU: 68.8% |62.5% |RDM: 54.7% | 80.0% |MLA: 85.9% |  87.5% |
+
+>>> Loop 71/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.33026162
+Boost factor:  3.009215
+[Approx] LLG: | 78.1% | 50.0% |Plus: 85.9% |  80.0% | ZLG: 89.1% | 90.0% |RLU: 73.4% |70.0% |RDM: 64.1% | 100.0% |MLA: 82.8% |  90.0% |
+
+>>> Loop 72/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.84555143
+Boost factor:  1.4633458
+[Approx] LLG: | 70.3% | 57.1% |Plus: 62.5% |  57.1% | ZLG: 90.6% | 100.0% |RLU: 71.9% |71.4% |RDM: 56.2% | 70.0% |MLA: 84.4% |  85.7% |
+
+>>> Loop 73/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.54611963
+Boost factor:  2.3616412
+[Approx] LLG: | 76.6% | 37.5% |Plus: 68.8% |  37.5% | ZLG: 93.8% | 75.0% |RLU: 76.6% |50.0% |RDM: 50.0% | 80.0% |MLA: 84.4% |  70.0% |
+
+>>> Loop 74/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.38243577
+Boost factor:  2.8526926
+[Approx] LLG: | 84.4% | 100.0% |Plus: 82.8% |  100.0% | ZLG: 93.8% | 71.4% |RLU: 87.5% |100.0% |RDM: 50.0% | 50.0% |MLA: 81.2% |  55.6% |
+
+>>> Loop 75/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.7221772
+Boost factor:  1.8334684
+[Approx] LLG: | 64.1% | 50.0% |Plus: 65.6% |  50.0% | ZLG: 87.5% | 87.5% |RLU: 67.2% |62.5% |RDM: 64.1% | 80.0% |MLA: 87.5% |  87.5% |
+
+>>> Loop 76/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.8519521
+Boost factor:  1.4441438
+[Approx] LLG: | 59.4% | 42.9% |Plus: 53.1% |  42.9% | ZLG: 75.0% | 55.6% |RLU: 54.7% |50.0% |RDM: 53.1% | 70.0% |MLA: 73.4% |  62.5% |
+
+>>> Loop 77/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.35356435
+Boost factor:  2.9393067
+[Approx] LLG: | 82.8% | 71.4% |Plus: 82.8% |  71.4% | ZLG: 84.4% | 75.0% |RLU: 76.6% |62.5% |RDM: 53.1% | 70.0% |MLA: 81.2% |  77.8% |
+
+>>> Loop 78/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.51809615
+Boost factor:  2.4457116
+[Approx] LLG: | 71.9% | 42.9% |Plus: 70.3% |  42.9% | ZLG: 84.4% | 75.0% |RLU: 71.9% |50.0% |RDM: 51.6% | 70.0% |MLA: 84.4% |  60.0% |
+
+>>> Loop 79/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6127896
+Boost factor:  2.1616313
+[Approx] LLG: | 62.5% | 33.3% |Plus: 60.9% |  33.3% | ZLG: 76.6% | 77.8% |RLU: 76.6% |55.6% |RDM: 54.7% | 90.0% |MLA: 79.7% |  70.0% |
+
+>>> Loop 80/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.545374
+Boost factor:  2.3638783
+[Approx] LLG: | 73.4% | 83.3% |Plus: 79.7% |  71.4% | ZLG: 79.7% | 66.7% |RLU: 64.1% |62.5% |RDM: 54.7% | 60.0% |MLA: 81.2% |  75.0% |
+
+>>> Loop 81/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.65789497
+Boost factor:  2.0263152
+[Approx] LLG: | 76.6% | 42.9% |Plus: 64.1% |  42.9% | ZLG: 85.9% | 62.5% |RLU: 71.9% |42.9% |RDM: 46.9% | 70.0% |MLA: 85.9% |  87.5% |
+
+>>> Loop 82/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.4482891
+Boost factor:  2.6551328
+[Approx] LLG: | 78.1% | 42.9% |Plus: 70.3% |  42.9% | ZLG: 87.5% | 62.5% |RLU: 82.8% |57.1% |RDM: 51.6% | 70.0% |MLA: 79.7% |  60.0% |
+
+>>> Loop 83/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.6845005
+Boost factor:  1.9464985
+[Approx] LLG: | 73.4% | 37.5% |Plus: 67.2% |  37.5% | ZLG: 87.5% | 87.5% |RLU: 73.4% |50.0% |RDM: 45.3% | 80.0% |MLA: 87.5% |  100.0% |
+
+>>> Loop 84/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.61901695
+Boost factor:  2.142949
+[Approx] LLG: | 68.8% | 42.9% |Plus: 60.9% |  42.9% | ZLG: 84.4% | 75.0% |RLU: 67.2% |50.0% |RDM: 51.6% | 70.0% |MLA: 87.5% |  77.8% |
+
+>>> Loop 85/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.553934
+Boost factor:  2.3381982
+[Approx] LLG: | 50.0% | 44.4% |Plus: 85.9% |  88.9% | ZLG: 84.4% | 100.0% |RLU: 73.4% |77.8% |RDM: 68.8% | 90.0% |MLA: 87.5% |  88.9% |
+
+>>> Loop 86/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5851626
+Boost factor:  2.2445123
+[Approx] LLG: | 65.6% | 40.0% |Plus: 79.7% |  60.0% | ZLG: 87.5% | 100.0% |RLU: 71.9% |60.0% |RDM: 62.5% | 100.0% |MLA: 85.9% |  90.0% |
+
+>>> Loop 87/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.41381112
+Boost factor:  2.7585669
+[Approx] LLG: | 84.4% | 57.1% |Plus: 84.4% |  57.1% | ZLG: 85.9% | 87.5% |RLU: 79.7% |62.5% |RDM: 53.1% | 70.0% |MLA: 85.9% |  77.8% |
+
+>>> Loop 88/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.5984736
+Boost factor:  2.2045794
+[Approx] LLG: | 70.3% | 71.4% |Plus: 68.8% |  71.4% | ZLG: 90.6% | 100.0% |RLU: 71.9% |87.5% |RDM: 53.1% | 70.0% |MLA: 90.6% |  100.0% |
+
+>>> Loop 89/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 70.3% | 66.7% |Plus: 65.6% |  33.3% | ZLG: 87.5% | 83.3% |RLU: 71.9% |42.9% |RDM: 42.2% | 60.0% |MLA: 70.3% |  66.7% |
+
+>>> Loop 90/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.3652603
+Boost factor:  2.9042192
+[Approx] LLG: | 79.7% | 66.7% |Plus: 79.7% |  66.7% | ZLG: 84.4% | 62.5% |RLU: 81.2% |50.0% |RDM: 50.0% | 60.0% |MLA: 81.2% |  66.7% |
+
+>>> Loop 91/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.3276185
+Boost factor:  3.0171447
+[Approx] LLG: | 75.0% | 55.6% |Plus: 73.4% |  55.6% | ZLG: 78.1% | 90.0% |RLU: 60.9% |55.6% |RDM: 64.1% | 90.0% |MLA: 81.2% |  90.0% |
+
+>>> Loop 92/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.49293748
+Boost factor:  2.5211878
+[Approx] LLG: | 68.8% | 44.4% |Plus: 67.2% |  44.4% | ZLG: 85.9% | 88.9% |RLU: 62.5% |44.4% |RDM: 65.6% | 90.0% |MLA: 90.6% |  88.9% |
+
+>>> Loop 93/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.40180543
+Boost factor:  2.7945838
+[Approx] LLG: | 81.2% | 50.0% |Plus: 85.9% |  75.0% | ZLG: 87.5% | 77.8% |RLU: 75.0% |55.6% |RDM: 48.4% | 80.0% |MLA: 84.4% |  88.9% |
+
+>>> Loop 94/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.76925266
+Boost factor:  1.6922421
+[Approx] LLG: | 73.4% | 66.7% |Plus: 59.4% |  33.3% | ZLG: 87.5% | 83.3% |RLU: 68.8% |66.7% |RDM: 45.3% | 60.0% |MLA: 85.9% |  62.5% |
+
+>>> Loop 95/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.93361855
+Boost factor:  1.1991444
+[Approx] LLG: | 62.5% | 25.0% |Plus: 54.7% |  25.0% | ZLG: 81.2% | 66.7% |RLU: 68.8% |50.0% |RDM: 56.2% | 80.0% |MLA: 71.9% |  62.5% |
+
+>>> Loop 96/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.70526636
+Boost factor:  1.884201
+[Approx] LLG: | 87.5% | 80.0% |Plus: 75.0% |  40.0% | ZLG: 96.9% | 83.3% |RLU: 79.7% |33.3% |RDM: 35.9% | 50.0% |MLA: 81.2% |  62.5% |
+
+>>> Loop 97/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  1.0
+Boost factor:  1.0
+[Approx] LLG: | 65.6% | 57.1% |Plus: 59.4% |  14.3% | ZLG: 89.1% | 85.7% |RLU: 70.3% |42.9% |RDM: 48.4% | 70.0% |MLA: 65.6% |  57.1% |
+
+>>> Loop 98/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.51656395
+Boost factor:  2.4503083
+[Approx] LLG: | 70.3% | 50.0% |Plus: 70.3% |  50.0% | ZLG: 85.9% | 77.8% |RLU: 70.3% |62.5% |RDM: 57.8% | 80.0% |MLA: 85.9% |  88.9% |
+
+>>> Loop 99/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.94956183
+Boost factor:  1.1513145
+[Approx] LLG: | 65.6% | 28.6% |Plus: 57.8% |  28.6% | ZLG: 89.1% | 71.4% |RLU: 70.3% |42.9% |RDM: 48.4% | 70.0% |MLA: 75.0% |  71.4% |
+
+>>> Loop 100/100 (Alpha=0.5)
+
+[BẮT ĐẦU UNLEARN] Tổng số mẫu: 64 | Batch Size: 16 | Epochs: 1
+MAX P:  0.44197643
+Boost factor:  2.6740708
+[Approx] LLG: | 62.5% | 57.1% |Plus: 64.1% |  57.1% | ZLG: 76.6% | 60.0% |RLU: 64.1% |50.0% |RDM: 60.9% | 70.0% |MLA: 85.9% |  70.0% |
+
+============================================================
+FINAL AVERAGE ACCURACY | Alpha=0.5 | Loops=100
+============================================================
+Method     | Approximate | Exact       | SCRUB       | NegGrad     | Retrain     
+--------------------------------------------------
+LLG        |      72.88% |       0.00% |       0.00%  |       0.00% |       0.00%
+PLUS       |      69.94% |       0.00% |       0.00%  |       0.00% |       0.00%
+ZLG        |      85.83% |       0.00% |       0.00%  |       0.00% |       0.00%
+RLU        |      73.23% |       0.00% |       0.00%  |       0.00% |       0.00%
+RDM        |      51.14% |       0.00% |       0.00%  |       0.00% |       0.00%
+MLA (Ours) |      81.22% |       0.00% |       0.00%  |       0.00% |       0.00%
+============================================================
+LLG        |      51.04% |       0.00% |       0.00%  |       0.00% |       0.00%
+PLUS       |      49.88% |       0.00% |       0.00%  |       0.00% |       0.00%
+ZLG        |      73.99% |       0.00% |       0.00%  |       0.00% |       0.00%
+RLU        |      56.32% |       0.00% |       0.00%  |       0.00% |       0.00%
+RDM        |      72.00% |       0.00% |       0.00%  |       0.00% |       0.00%
+MLA (Ours) |      69.60% |       0.00% |       0.00%  |       0.00% |       0.00%
+============================================================

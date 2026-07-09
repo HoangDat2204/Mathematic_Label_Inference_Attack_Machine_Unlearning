@@ -78,19 +78,55 @@ class Unlearner:
         return total_loss / len(loader)
 
 
-    import copy
-
-    def approximate_unlearn(self, list_of_batches, lr=0.01, batch_size=256, local_epochs=1):
+    
+    def approximate_unlearn(self, list_of_batches, retain_loader, test_loader, forget_dataset, target_indices, 
+                           lr=0.01, batch_size=256, local_epochs=1):
         """
-        Thực hiện Unlearning bằng cách chia nhỏ cục dữ liệu lớn thành các mini-batches 
-        và lặp lại qua nhiều epochs cục bộ.
+        Thực hiện Unlearning và đánh giá hiệu năng Trước/Sau trên các tập dữ liệu.
+        Thuật toán unlearn gốc được giữ nguyên bản tuyệt đối.
+        """
+        # --- [ĐÁNH GIÁ] CHUẨN BỊ TẬP FORGET CÒN LẠI (FORGET_SET \ {FORGET_BATCH}) ---
+        all_forget_indices = set(range(len(forget_dataset)))
+        remaining_indices = list(all_forget_indices - set(target_indices))
+        remaining_forget_subset = Subset(forget_dataset, remaining_indices)
+        remaining_forget_loader = DataLoader(
+            remaining_forget_subset, batch_size=256, shuffle=False, num_workers=2
+        )
         
-        Args:
-            list_of_batches: List chứa 1 tuple duy nhất [(all_images, all_labels)]
-            lr: Học suất (Learning rate) cho Gradient Ascent.
-            batch_size: Kích thước batch nhỏ mong muốn để thực hiện từng bước nhảy.
-            local_epochs: Số lần lặp lại (epochs) trên toàn bộ lượng dữ liệu này.
-        """
+        # Hàm hỗ trợ đánh giá accuracy của một Loader
+        def evaluate_acc(eval_model, loader):
+            eval_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for imgs, lbls in loader:
+                    imgs, lbls = imgs.to(self.device), lbls.to(self.device)
+                    outputs = eval_model(imgs)
+                    _, predicted = outputs.max(1)
+                    total += lbls.size(0)
+                    correct += predicted.eq(lbls).sum().item()
+            return 100.0 * correct / total if total > 0 else 0.0
+
+        # Hàm hỗ trợ đánh giá accuracy của batch ảnh đang unlearn (list_of_batches)
+        def evaluate_batch_input_acc(eval_model, batches):
+            eval_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for imgs, lbls in batches:
+                    imgs, lbls = imgs.to(self.device), lbls.to(self.device)
+                    outputs = eval_model(imgs)
+                    _, predicted = outputs.max(1)
+                    total += lbls.size(0)
+                    correct += predicted.eq(lbls).sum().item()
+            return 100.0 * correct / total if total > 0 else 0.0
+        
+        acc_batch_before = evaluate_batch_input_acc(self.target_model, list_of_batches)
+
+
+        # =========================================================================
+        # --- THUẬT TOÁN UNLEARN GỐC CỦA BẠN (GIỮ NGUYÊN BẢN TUYỆT ĐỐI) ---
+        # =========================================================================
         # 1. Trích xuất toàn bộ dữ liệu gộp từ batch_input
         all_images, all_labels = list_of_batches[0]
         num_samples = all_images.size(0)
@@ -115,8 +151,6 @@ class Unlearner:
                 break
 
         print(f"\n[BẮT ĐẦU UNLEARN] Tổng số mẫu: {num_samples} | Batch Size: {actual_batch_size} | Epochs: {local_epochs}")
-        # if last_bias_param is not None:
-        #     print(f"-> Đang theo dõi lớp bias cuối cùng: '{last_bias_name}'")
 
         # --- VÒNG LẶP CHÍNH: LOCAL EPOCHS ---
         for epoch in range(local_epochs):
@@ -142,14 +176,11 @@ class Unlearner:
                 batch_imgs = epoch_images[start_idx:end_idx].to(self.device)
                 batch_lbls = epoch_labels[start_idx:end_idx].to(self.device)
 
-               
                 outputs = model(batch_imgs)
                 probabilities = F.softmax(outputs, dim=1) 
-                # print(probabilities)
                 
                 # Cập nhật trọng số bằng Gradient Ascent
                 loss = -self.criterion(outputs, batch_lbls) 
-                
                 
                 optimizer.zero_grad()
                 loss.backward()
@@ -157,20 +188,127 @@ class Unlearner:
                 epoch_loss += loss.item()
                 
             # --- ĐÁNH GIÁ VÀ IN RA BIẾN ĐỘNG SAU MỖI EPOCH ---
-            # print(f"\n" + "="*70)
-            # print(f" EPOCH CỤC BỘ {epoch+1:02d} / {local_epochs:02d} hoàn tất ".center(70, "-"))
-            # print(f"• Loss trung bình của Epoch: {epoch_loss / num_batches:.4f}")
+            print(f"\n" + "="*70)
+            print(f" EPOCH CỤC BỘ {epoch+1:02d} / {local_epochs:02d} hoàn tất ".center(70, "-"))
+            print(f"• Loss trung bình của Epoch: {epoch_loss / num_batches:.4f}")
             
-            # if last_bias_param is not None:
-            #     bias_end_epoch = last_bias_param.detach().clone()
-            #     delta_bias = bias_end_epoch - bias_start_epoch
-            #     delta_norm = torch.norm(delta_bias).item()
+            if last_bias_param is not None:
+                bias_end_epoch = last_bias_param.detach().clone()
+                delta_bias = bias_end_epoch - bias_start_epoch
+                delta_norm = torch.norm(delta_bias).item()
                 
-            #     print(f"• Delta Bias lớp '{last_bias_name}' sau Epoch này:\n  {delta_bias.cpu().numpy()}")
-            #     print(f"• Khoảng cách dịch chuyển bias (L2 Norm): {delta_norm:.8f}")
-            # print("="*70)
+                print(f"• Delta Bias lớp '{last_bias_name}' sau Epoch này:\n  {delta_bias.cpu().numpy()}")
+                print(f"• Khoảng cách dịch chuyển bias (L2 Norm): {delta_norm:.8f}")
+            print("="*70)
+        # =========================================================================
+
+        # --- [ĐÁNH GIÁ] ĐO ĐẠC SAU KHI CHẠY UNLEARN (AFTER) ---
+        print("\n" + "="*80)
+        print(" ĐÁNH GIÁ HIỆU NĂNG SAU KHI UNLEARN (AFTER) ".center(80, "="))
+        
+        acc_retain_after = evaluate_acc(model, retain_loader)
+        acc_test_after = evaluate_acc(model, test_loader)
+        acc_rem_forget_after = evaluate_acc(model, remaining_forget_loader)
+        acc_batch_after = evaluate_batch_input_acc(model, list_of_batches)
+        
+        print(f"• Retain Accuracy (Cần giữ lại)       : {acc_retain_after:.2f}% ")
+        print(f"• Test Accuracy (Tổng quát chung)       : {acc_test_after:.2f}%  ")
+        print(f"• Remaining Forget Acc (Giữ lại bổ trợ) : {acc_rem_forget_after:.2f}% ")
+        print(f"• Target Forget Batch Acc (ĐÃ QUÊN)     : {acc_batch_after:.2f}%  ")
+        print("="*80 + "\n")
+        
+        return model, acc_retain_after, acc_test_after, acc_rem_forget_after, acc_batch_after, acc_batch_before
+    # def approximate_unlearn(self, list_of_batches, lr=0.01, batch_size=64, local_epochs=1):
+    #     """
+    #     Thực hiện Unlearning bằng cách chia nhỏ cục dữ liệu lớn thành các mini-batches 
+    #     và lặp lại qua nhiều epochs cục bộ.
+        
+    #     Args:
+    #         list_of_batches: List chứa 1 tuple duy nhất [(all_images, all_labels)]
+    #         lr: Học suất (Learning rate) cho Gradient Ascent.
+    #         batch_size: Kích thước batch nhỏ mong muốn để thực hiện từng bước nhảy.
+    #         local_epochs: Số lần lặp lại (epochs) trên toàn bộ lượng dữ liệu này.
+    #     """
+    #     # 1. Trích xuất toàn bộ dữ liệu gộp từ batch_input
+    #     all_images, all_labels = list_of_batches[0]
+    #     num_samples = all_images.size(0)
+        
+    #     # Đảm bảo batch_size không vượt quá tổng số lượng mẫu có sẵn
+    #     actual_batch_size = min(batch_size, num_samples)
+        
+    #     # Luôn khởi đầu từ Target Model (M_finetuned)
+    #     model = copy.deepcopy(self.target_model)
+    #     model.train()
+        
+    #     # Khởi tạo Optimizer
+    #     optimizer = optim.SGD(model.parameters(), lr=lr)
+        
+    #     # Xác định tham số bias lớp cuối cùng để theo dõi sự biến động
+    #     last_bias_param = None
+    #     last_bias_name = None
+    #     for name, param in reversed(list(model.named_parameters())):
+    #         if 'bias' in name:
+    #             last_bias_param = param
+    #             last_bias_name = name
+    #             break
+
+    #     print(f"\n[BẮT ĐẦU UNLEARN] Tổng số mẫu: {num_samples} | Batch Size: {actual_batch_size} | Epochs: {local_epochs}")
+    #     # if last_bias_param is not None:
+    #     #     print(f"-> Đang theo dõi lớp bias cuối cùng: '{last_bias_name}'")
+
+    #     # --- VÒNG LẶP CHÍNH: LOCAL EPOCHS ---
+    #     for epoch in range(local_epochs):
+    #         # Lưu lại trạng thái bias ở đầu mỗi epoch để tính delta epoch
+    #         if last_bias_param is not None:
+    #             bias_start_epoch = last_bias_param.detach().clone()
+                
+    #         # Xáo trộn ngẫu nhiên các chỉ số (indices) ở đầu mỗi epoch để tăng tính ổn định
+    #         shuffled_indices = torch.randperm(num_samples)
+    #         epoch_images = all_images[shuffled_indices]
+    #         epoch_labels = all_labels[shuffled_indices]
             
-        return model
+    #         # Tính toán tổng số lượng batch nhỏ trong epoch này
+    #         num_batches = (num_samples + actual_batch_size - 1) // actual_batch_size
+    #         epoch_loss = 0.0
+            
+    #         # --- VÒNG LẶP PHỤ: DUYỆT TỪNG MINI-BATCH ---
+    #         for b in range(num_batches):
+    #             start_idx = b * actual_batch_size
+    #             end_idx = min((b + 1) * actual_batch_size, num_samples)
+                
+    #             # Cắt lát (slice) lấy mini-batch tương ứng
+    #             batch_imgs = epoch_images[start_idx:end_idx].to(self.device)
+    #             batch_lbls = epoch_labels[start_idx:end_idx].to(self.device)
+
+               
+    #             outputs = model(batch_imgs)
+    #             probabilities = F.softmax(outputs, dim=1) 
+    #             # print(probabilities)
+                
+    #             # Cập nhật trọng số bằng Gradient Ascent
+    #             loss = -self.criterion(outputs, batch_lbls) 
+                
+                
+    #             optimizer.zero_grad()
+    #             loss.backward()
+    #             optimizer.step()
+    #             epoch_loss += loss.item()
+                
+    #         # --- ĐÁNH GIÁ VÀ IN RA BIẾN ĐỘNG SAU MỖI EPOCH ---
+    #         # print(f"\n" + "="*70)
+    #         # print(f" EPOCH CỤC BỘ {epoch+1:02d} / {local_epochs:02d} hoàn tất ".center(70, "-"))
+    #         # print(f"• Loss trung bình của Epoch: {epoch_loss / num_batches:.4f}")
+            
+    #         # if last_bias_param is not None:
+    #         #     bias_end_epoch = last_bias_param.detach().clone()
+    #         #     delta_bias = bias_end_epoch - bias_start_epoch
+    #         #     delta_norm = torch.norm(delta_bias).item()
+                
+    #         #     print(f"• Delta Bias lớp '{last_bias_name}' sau Epoch này:\n  {delta_bias.cpu().numpy()}")
+    #         #     print(f"• Khoảng cách dịch chuyển bias (L2 Norm): {delta_norm:.8f}")
+    #         # print("="*70)
+            
+    #     return model
 
     def fine_tune_unlearn(self, forget_dataset_base, indices_to_remove, unlr =0.001 ):
         """
