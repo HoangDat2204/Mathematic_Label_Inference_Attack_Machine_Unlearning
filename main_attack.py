@@ -133,6 +133,23 @@ def compute_batch_accuracy(true_labels, pred_labels):
         correct += min(count_true[label], count_pred.get(label, 0))
     return (correct / len(true_labels)) * 100.0
 
+
+def compute_class_accuracy_iou(true_labels, pred_labels):
+    """
+    Tính accuracy dựa trên tỷ lệ giao/hợp của các tập hợp lớp xuất hiện.
+    Ví dụ: true=[2, 2, 3], pred=[1, 2, 3] -> Giao {2, 3} (2) / Hợp {1, 2, 3} (3) -> 66.67%
+    """
+    true_classes = set(true_labels)
+    pred_classes = set(pred_labels)
+    
+    if len(true_classes) == 0: 
+        return 0.0
+        
+    intersection = true_classes.intersection(pred_classes)
+    union = true_classes.union(pred_classes)
+    
+    return (len(intersection) / len(union)) * 100.0
+
 # --- [NEW] HÀM LẤY MẪU THEO DIRICHLET (ALPHA) ---
 def sample_batch_indices(class_to_indices, alpha, batch_size, num_classes):
     """
@@ -162,6 +179,79 @@ def sample_batch_indices(class_to_indices, alpha, batch_size, num_classes):
     # Shuffle lại để không bị thứ tự theo class
     np.random.shuffle(batch_indices)
     return batch_indices
+
+
+import torch
+import torch.nn.functional as F
+
+def predict_single_image_with_prob(model, image, target, device, class_names=None):
+    """
+    Dự đoán nhãn cho 1 ảnh lẻ, hiển thị xác suất (probability) của lớp được chọn
+    và phân phối xác suất của toàn bộ các lớp.
+    
+    Args:
+        model: Mô hình PyTorch đã được train.
+        image: Tensor ảnh (đã được chuẩn hóa, kích thước [C, H, W]).
+        target: Nhãn thực tế (số nguyên hoặc Tensor chứa 1 phần tử).
+        device: Thiết bị chạy (cpu hoặc cuda).
+        class_names: Danh sách tên các lớp (tùy chọn, ví dụ: ['airplane', 'automobile', ...])
+    """
+    # 1. Chuyển mô hình về chế độ đánh giá (evaluation mode)
+    model.eval()
+    
+    # 2. Chuẩn bị tensor ảnh
+    if not isinstance(image, torch.Tensor):
+        raise TypeError("Ảnh đầu vào phải là một PyTorch Tensor đã được chuẩn hóa.")
+    
+    # Đảm bảo ảnh có 4 chiều [1, C, H, W] và đưa lên đúng thiết bị (GPU/CPU)
+    image_tensor = image.unsqueeze(0).to(device)
+    
+    # Chuyển nhãn thực tế về dạng số nguyên thuần túy
+    true_idx = target if isinstance(target, int) else target.item()
+    
+    # 3. Dự đoán không tính toán gradient
+    with torch.no_grad():
+        outputs = model(image_tensor)
+        
+        # Áp dụng Softmax theo chiều của các lớp (dim=1) để tính xác suất
+        probabilities = F.softmax(outputs, dim=1)[0]  # Lấy phần tử đầu tiên của batch
+        
+    # 4. Tìm lớp có xác suất cao nhất
+    max_prob, predicted_class = torch.max(probabilities, dim=0)
+    
+    predicted_idx = predicted_class.item()
+    predicted_prob_pct = max_prob.item() * 100
+    is_correct = (predicted_idx == true_idx)
+    
+    # --- HIỂN THỊ KẾT QUẢ ---
+    print("\n" + "="*60)
+    print(" KẾT QUẢ DỰ ĐOÁN CHO 1 ẢNH ".center(60, "-"))
+    
+    if class_names:
+        true_label = class_names[true_idx]
+        pred_label = class_names[predicted_idx]
+        print(f"• Nhãn thực tế (True Label) : {true_label} (ID: {true_idx})")
+        print(f"• Mô hình dự đoán (Predict)  : {pred_label} (ID: {predicted_idx})")
+    else:
+        print(f"• Nhãn thực tế (True Label) : ID {true_idx}")
+        print(f"• Mô hình dự đoán (Predict)  : ID {predicted_idx}")
+        
+    print(f"• Độ tin cậy (Probability)   : {predicted_prob_pct:.2f}%")
+    print(f"• Kết quả đánh giá          : {'ĐÚNG (CORRECT)' if is_correct else 'SAI (WRONG)'}")
+    
+    # Hiển thị Top 3 xác suất cao nhất để bạn dễ quan sát
+    print("-" * 60)
+    print("Top 3 lớp có xác suất cao nhất mô hình dự đoán:")
+    top_probs, top_indices = torch.topk(probabilities, 3)
+    for i in range(3):
+        prob = top_probs[i].item() * 100
+        idx = top_indices[i].item()
+        label_name = class_names[idx] if class_names else f"ID {idx}"
+        print(f"  {i+1}. {label_name:<15}: {prob:.2f}%")
+    print("="*60)
+    
+    return is_correct, predicted_idx, predicted_prob_pct
+    
 
 def main():
     parser = argparse.ArgumentParser(description='5x2 Attack Benchmark (Including MLA)')
@@ -236,7 +326,7 @@ def main():
     methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla'] # mla_p = MLA+
     # methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla', 'mla_p', 'zlgp', 'llg+p']
     results = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
-    
+    results_class = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
     # Vòng lặp thí nghiệm
     for loop in range(args.total_loops):
         print(f"\n>>> Loop {loop+1}/{args.total_loops} (Alpha={args.alpha})")
@@ -257,6 +347,7 @@ def main():
         true_labels = sorted(labels.tolist())
         batch_input = [(images, labels)]
         # --- A. APPROXIMATE ---
+        # predict_single_image_with_prob(target_model, images[0], labels[0], device)
 
         if (args.unlearned_algo == "neggrad"):
             # Load Batch Data
@@ -275,14 +366,15 @@ def main():
             preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, confident = confident_approx,num_classes=num_classes)
             preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
 
-            print(f"[Approx] LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | "
-                f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% | "
-                f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | "
-                f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% | "
-                f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | "
-                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | " )
+            print(f"[Approx] LLG: | {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% |"
+                f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
+                f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% |"
+                f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% |{compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% |"
+                f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |"
+                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |" )
 
             for m in preds: results['approx'][m] += compute_batch_accuracy(true_labels, preds[m])
+            for m in preds: results_class['approx'][m] += compute_class_accuracy_iou(true_labels, preds[m])
         
         
         
@@ -441,6 +533,17 @@ def main():
 
         name = "MLA (Ours)" if m.upper() == "MLA" else m.upper()
         print(f"{name:<10} | {avg_ap:10.2f}% | {avg_ex:10.2f}% | {avg_sc:10.2f}%  | {avg_neg:10.2f}% | {avg_rt:10.2f}%")
+    print("="*60)
+
+    for m in methods:
+        avg_ap_class = results_class['approx'][m] / args.total_loops
+        avg_sc_class = results_class['scrub'][m] / args.total_loops
+        avg_ex_class = results_class['finetune'][m] / args.total_loops
+        avg_neg_class = results_class['neggrad'][m] / args.total_loops
+        avg_rt_class = results_class['retrain'][m] / args.total_loops
+
+        name = "MLA (Ours)" if m.upper() == "MLA" else m.upper()
+        print(f"{name:<10} | {avg_ap_class:10.2f}% | {avg_ex_class:10.2f}% | {avg_sc_class:10.2f}%  | {avg_neg_class:10.2f}% | {avg_rt_class:10.2f}%")
     print("="*60)
 
 if __name__ == '__main__':

@@ -37,7 +37,7 @@ class DistillKL(nn.Module):
 
 class Unlearner:
     def __init__(self, target_model, base_model, device='cuda'):
-        self.target_model = target_model
+        self.target_model = copy.deepcopy(target_model)
         self.base_model = base_model
         self.device = device
         self.criterion = nn.CrossEntropyLoss()
@@ -80,7 +80,7 @@ class Unlearner:
 
     import copy
 
-    def approximate_unlearn(self, list_of_batches, lr=0.01, batch_size=256, local_epochs=5):
+    def approximate_unlearn(self, list_of_batches, lr=0.01, batch_size=256, local_epochs=1):
         """
         Thực hiện Unlearning bằng cách chia nhỏ cục dữ liệu lớn thành các mini-batches 
         và lặp lại qua nhiều epochs cục bộ.
@@ -115,8 +115,8 @@ class Unlearner:
                 break
 
         print(f"\n[BẮT ĐẦU UNLEARN] Tổng số mẫu: {num_samples} | Batch Size: {actual_batch_size} | Epochs: {local_epochs}")
-        if last_bias_param is not None:
-            print(f"-> Đang theo dõi lớp bias cuối cùng: '{last_bias_name}'")
+        # if last_bias_param is not None:
+        #     print(f"-> Đang theo dõi lớp bias cuối cùng: '{last_bias_name}'")
 
         # --- VÒNG LẶP CHÍNH: LOCAL EPOCHS ---
         for epoch in range(local_epochs):
@@ -141,29 +141,34 @@ class Unlearner:
                 # Cắt lát (slice) lấy mini-batch tương ứng
                 batch_imgs = epoch_images[start_idx:end_idx].to(self.device)
                 batch_lbls = epoch_labels[start_idx:end_idx].to(self.device)
+
+               
+                outputs = model(batch_imgs)
+                probabilities = F.softmax(outputs, dim=1) 
+                # print(probabilities)
                 
                 # Cập nhật trọng số bằng Gradient Ascent
+                loss = -self.criterion(outputs, batch_lbls) 
+                
+                
                 optimizer.zero_grad()
-                outputs = model(batch_imgs)
-                loss = -self.criterion(outputs, batch_lbls) # Dấu trừ để đẩy loss lên cao (Quên)
                 loss.backward()
                 optimizer.step()
-                
                 epoch_loss += loss.item()
                 
             # --- ĐÁNH GIÁ VÀ IN RA BIẾN ĐỘNG SAU MỖI EPOCH ---
-            print(f"\n" + "="*70)
-            print(f" EPOCH CỤC BỘ {epoch+1:02d} / {local_epochs:02d} hoàn tất ".center(70, "-"))
-            print(f"• Loss trung bình của Epoch: {epoch_loss / num_batches:.4f}")
+            # print(f"\n" + "="*70)
+            # print(f" EPOCH CỤC BỘ {epoch+1:02d} / {local_epochs:02d} hoàn tất ".center(70, "-"))
+            # print(f"• Loss trung bình của Epoch: {epoch_loss / num_batches:.4f}")
             
-            if last_bias_param is not None:
-                bias_end_epoch = last_bias_param.detach().clone()
-                delta_bias = bias_end_epoch - bias_start_epoch
-                delta_norm = torch.norm(delta_bias).item()
+            # if last_bias_param is not None:
+            #     bias_end_epoch = last_bias_param.detach().clone()
+            #     delta_bias = bias_end_epoch - bias_start_epoch
+            #     delta_norm = torch.norm(delta_bias).item()
                 
-                print(f"• Delta Bias lớp '{last_bias_name}' sau Epoch này:\n  {delta_bias.cpu().numpy()}")
-                print(f"• Khoảng cách dịch chuyển bias (L2 Norm): {delta_norm:.8f}")
-            print("="*70)
+            #     print(f"• Delta Bias lớp '{last_bias_name}' sau Epoch này:\n  {delta_bias.cpu().numpy()}")
+            #     print(f"• Khoảng cách dịch chuyển bias (L2 Norm): {delta_norm:.8f}")
+            # print("="*70)
             
         return model
 
