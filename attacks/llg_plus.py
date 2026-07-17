@@ -93,11 +93,12 @@ def attack_llg_plus(original_model, unlearned_model, proxy_gradients, lr ,aux_lo
     # Tìm weight layer cuối
     for name in reversed(list(proxy_gradients.keys())):
         if 'weight' in name and len(proxy_gradients[name].shape) == 2:
+            print("Kich thuoc" ,proxy_gradients[name].shape)
             if proxy_gradients[name].shape[0] == num_classes:
                 w_grad = proxy_gradients[name]
                 grad_vector = torch.sum(w_grad, dim=-1).detach().clone()
                 break
-
+    print(grad_vector)
     h1_extraction = []
     gradients_for_prediction = grad_vector/lr
 

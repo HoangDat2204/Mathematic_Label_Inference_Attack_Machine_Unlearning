@@ -10,6 +10,7 @@ from recovery.nn.custom_cnn import get_custom_model
 from recovery.unlearn import Unlearner, get_weight_difference
 from torch.utils.data import DataLoader, Subset
 import random
+import time
 
 # --- IMPORT CÁC THUẬT TOÁN ---
 from attacks.llg import attack_llg
@@ -24,6 +25,57 @@ from attacks.rlu import attack_rlu_full
 from attacks.mla import attack_mla
 
 from collections import Counter
+
+
+import torch
+
+def measure_metrics(device, func, *args, **kwargs):
+    """
+    Đo đạc 3 chỉ số: Thời gian chạy, Peak VRAM tiêu thụ (MB), và tổng số FLOPs của một hàm.
+    """
+    is_cuda = 'cuda' in str(device)
+    
+    # 1. ĐỒNG BỘ VÀ RESET THÔNG SỐ VRAM
+    if is_cuda:
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()  # Reset bộ đếm đỉnh VRAM
+        mem_before = torch.cuda.memory_allocated()  # Bộ nhớ hiện tại trước khi chạy
+    else:
+        mem_before = 0
+
+    flops = 0
+    t0 = time.perf_counter()
+
+    # 2. ĐO FLOPS BẰNG PYTORCH PROFILER GỐC
+    try:
+        activities = [torch.profiler.ProfilerActivity.CPU]
+        if is_cuda:
+            activities.append(torch.profiler.ProfilerActivity.CUDA)
+            
+        with torch.profiler.profile(
+            activities=activities,
+            with_flops=True  # Bật tính năng đếm FLOPs
+        ) as prof:
+            result = func(*args, **kwargs)
+            
+        # Cộng dồn tất cả các FLOPs từ các toán tử (như Conv2d, Linear,...)
+        flops = sum(event.flops for event in prof.key_averages() if event.flops is not None)
+    except Exception:
+        # Fallback phòng hờ nếu môi trường không hỗ trợ đếm FLOPs bằng Profiler
+        result = func(*args, **kwargs)
+        flops = -1  # Ký hiệu không đo được FLOPs
+
+    # 3. ĐỒNG BỘ VÀ ĐO ĐẠC TIME & VRAM SAU KHI CHẠY
+    if is_cuda:
+        torch.cuda.synchronize()
+        mem_peak = torch.cuda.max_memory_allocated()  # Lượng VRAM cao nhất đạt được khi hàm chạy
+        vram_used = max(0.0, (mem_peak - mem_before) / (1024 ** 2))  # Chuyển đổi Bytes sang MB
+    else:
+        vram_used = 0.0
+
+    elapsed_time = time.perf_counter() - t0
+    
+    return result, elapsed_time, vram_used, flops
 
 def count_classes(loader):
     class_counts = Counter()
@@ -335,6 +387,9 @@ def main():
     acc_rem_forget_after = 0
     acc_batch_after = 0
     acc_batch_before = 0
+    flops_dict_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
+    vram_total =  {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
+    times_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
     for loop in range(args.total_loops):
         print(f"\n>>> Loop {loop+1}/{args.total_loops} (Alpha={args.alpha})")
 
@@ -366,7 +421,9 @@ def main():
                 test_loader=test_loader,
                 forget_dataset=forget_dataset,
                 target_indices=target_indices,
-                lr=args.unlr
+                lr=args.unlr,
+                batch_size = args.mini_batch_size,
+                local_epochs = args.local_loops
             )
             acc_retain_after += acc_retain_after_epoch
             acc_test_after += acc_test_after_epoch
@@ -379,19 +436,51 @@ def main():
             #     lr=args.unlr
             # )
             
+            # Hàm hỗ trợ đồng bộ hóa GPU trước khi ghi nhận mốc thời gian
+            def sync_gpu():
+                if 'cuda' in str(device):
+                    torch.cuda.synchronize()
+
             diff_approx = get_weight_difference(target_model, model_approx)
-            
-       
-
             confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
+            
+            # Khởi tạo từ điển lưu thời gian chạy của từng phương pháp
+            times = {}
+            vrams = {}
+            flops_dict = {}
             preds = {}
-            preds['llg']  = attack_llg(diff_approx, num_classes, args.batch_size)
-            preds['plus'] = attack_llg_plus(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
-            preds['zlg']  = attack_zlg(target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes)
-            preds['rlu']  = attack_rlu_full(target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, num_epochs= 1, num_classes = num_classes, device = device)
-            preds['mla'] = attack_mla(diff_approx, batch_size=attack_batch_size, confident = confident_approx,num_classes=num_classes)
-            preds['rdm'] = create_balanced_labels( args.batch_size, num_classes)
 
+            # 1. Đo LLG
+            preds['llg'], times['llg'], vrams['llg'], flops_dict['llg'] = measure_metrics(
+                device, attack_llg, diff_approx, num_classes, args.batch_size
+            )
+
+            # 2. Đo LLG+ (Plus)
+            preds['plus'], times['plus'], vrams['plus'], flops_dict['plus'] = measure_metrics(
+                device, attack_llg_plus, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
+            # 3. Đo ZLG
+            preds['zlg'], times['zlg'], vrams['zlg'], flops_dict['zlg'] = measure_metrics(
+                device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
+            # 4. Đo RLU
+            preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
+                device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
+            )
+
+            # 5. Đo MLA
+            preds['mla'], times['mla'], vrams['mla'], flops_dict['mla'] = measure_metrics(
+                device, attack_mla, diff_approx, attack_batch_size, confident_approx, num_classes
+            )
+
+            # 6. Đo RDM (Random)
+            preds['rdm'], times['rdm'], vrams['rdm'], flops_dict['rdm'] = measure_metrics(
+                device, create_balanced_labels, args.batch_size, num_classes
+            )
+
+            # --- IN KẾT QUẢ ĐỘ CHÍNH XÁC ---
             print(f"[Approx] LLG: | {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% |"
                 f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
                 f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% |"
@@ -399,47 +488,36 @@ def main():
                 f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |"
                 f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |" )
 
-            for m in preds: results['approx'][m] += compute_batch_accuracy(true_labels, preds[m])
-            for m in preds: results_class['approx'][m] += compute_class_accuracy_iou(true_labels, preds[m])
-        
-        
-        
-        # --- B. FineTune ---
-        elif (args.unlearned_algo == "finetuning"):
-            print(f"   [FineTune] Retraining...")
-            model_fine_tune = unlearner.fine_tune_unlearn(forget_dataset, target_indices, unlr = args.unlr)
-            diff_fine_tune = get_weight_difference(target_model, model_fine_tune)
-                    
-            target_bias = None
-            for name in reversed(list(diff_fine_tune.keys())):
-                if 'bias' in name and diff_fine_tune[name].shape[0] == num_classes:
-                    target_bias = diff_fine_tune[name].detach().cpu().numpy().flatten()
-                    break    
-            print("Target_Bias: ", target_bias)
+            # --- IN KẾT QUẢ TIME, VRAM & FLOPS ---
+            print("\n" + "-"*80)
+            print(" BÁO CÁO TÀI NGUYÊN TIÊU THỤ CỦA CÁC PHƯƠNG PHÁP ".center(80, "-"))
+            for m in ['llg', 'plus', 'zlg', 'rlu', 'mla', 'rdm']:
+                # Định dạng hiển thị FLOPs (Giga FLOPs hoặc Mega FLOPs)
+                f_val = flops_dict[m]
+                if f_val >= 1e9:
+                    f_str = f"{f_val / 1e9:.2f} GFLOPs"
+                elif f_val >= 1e6:
+                    f_str = f"{f_val / 1e6:.2f} MFLOPs"
+                elif f_val == -1:
+                    f_str = "N/A (Not Supported)"
+                else:
+                    f_str = f"{f_val} FLOPs"
+                
+                print(f"• {m.upper():<5} | Time: {times[m]:.4f}s | Peak VRAM: {vrams[m]:.4f} MB | Computations: {f_str}")
+            print("-" * 80 + "\n")
 
-            confident_fine_tune = compute_overlap_metric(diff_fine_tune, target_model, num_classes)
-            preds_ft = {}
-            preds_ft['llg']  = attack_llg(diff_fine_tune, num_classes, args.batch_size)
-            preds_ft['plus'] = attack_llg_plus(target_model, model_fine_tune, diff_fine_tune, 1, aux_loader, args.batch_size, num_classes)
-            preds_ft['zlg']  = attack_zlg(target_model, model_fine_tune, diff_fine_tune, 1, aux_loader, args.batch_size, num_classes)
-            preds_ft['rlu']  = attack_rlu_full(target_model, model_fine_tune, diff_fine_tune, aux_loader, args.batch_size, 1, num_epochs= 1, num_classes = num_classes, device = device)
-            preds_ft['rdm'] = create_balanced_labels( args.batch_size, num_classes)
-            preds_ft['mla'] = attack_mla(diff_fine_tune, batch_size=attack_batch_size, confident = confident_fine_tune, num_classes=num_classes, approx = False)
-        
-            print(f"[Exact ] LLG: {compute_batch_accuracy(true_labels, preds_ft['llg']):.1f}% | "
-                f"Plus: {compute_batch_accuracy(true_labels, preds_ft['plus']):.1f}% | "
-                f"ZLG: {compute_batch_accuracy(true_labels, preds_ft['zlg']):.1f}% | "
-                f"RLU: {compute_batch_accuracy(true_labels, preds_ft['rlu']):.1f}% | "
-                f"RDM: {compute_batch_accuracy(true_labels, preds_ft['rdm']):.1f}% | "
-                f"MLA: {compute_batch_accuracy(true_labels, preds_ft['mla']):.1f}% | " )
-
-                    
-            for m in preds_ft: results['finetune'][m] += compute_batch_accuracy(true_labels, preds_ft[m])
-            
+            for m in preds:
+                results['approx'][m] += compute_batch_accuracy(true_labels, preds[m])
+                results_class['approx'][m] += compute_class_accuracy_iou(true_labels, preds[m])
+                flops_dict_total[m] += flops_dict[m]
+                vram_total[m] += vrams[m]
+                times_total[m] += times[m]
+                
         elif (args.unlearned_algo == "scrub"):
             print(f"   [SCRUB] Retraining via Alternating Min-Max Distillation...")
-            model_scrub = unlearner.scrub_unlearn(retain_dataset, forget_dataset, target_indices, unlr = args.unlr)
+            model_scrub = unlearner.scrub_unlearn(retain_dataset, forget_dataset, target_indices, test_loader)
             diff_scrub = get_weight_difference(target_model, model_scrub)
+
             confident_scrub = compute_overlap_metric(diff_scrub, target_model, num_classes)
             preds_sc = {}
             preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
@@ -465,7 +543,7 @@ def main():
         elif (args.unlearned_algo == "neggradp"):
             print(f"   [NegGrad+] Retraining via Gradient Ascent (Chance Level Clamping)...")
             # Gọi hàm neggrad_unlearn (Các tham số như epochs, lr, alpha đã có default, 
-            model_ng = unlearner.neggrad_unlearn(retain_dataset, forget_dataset, target_indices, num_classes = num_classes )
+            model_ng = unlearner.neggrad_unlearn(retain_dataset, forget_dataset, target_indices, test_loader, num_classes = num_classes )
             
             # Trích xuất độ lệch trọng số (Gradient/Weight Leakage)
             diff_ng = get_weight_difference(target_model, model_ng)
@@ -575,6 +653,10 @@ def main():
 
     print(f"{'Acc retain':<10} | {'Acc test':<11} | {'Acc Finetune':<11} | {'Acc forget':<11}| {'Acc forget before':<11}  " )
     print(f"{acc_retain_after / args.total_loops :<10} | {acc_test_after / args.total_loops :10.2f}% | {acc_rem_forget_after / args.total_loops :10.2f}% | {acc_batch_after / args.total_loops:10.2f}% | {acc_batch_before / args.total_loops:10.2f}%")
+
+    for m in ['llg', 'plus', 'zlg', 'rlu', 'mla', 'rdm']:
+      
+        print(f"• {m.upper():<5} | Time: {times_total[m]/args.total_loops:.4f}s | Peak VRAM: {vram_total[m]/args.total_loops:.2f} MB | Computations: {flops_dict_total[m]/args.total_loops}")
 
 if __name__ == '__main__':
     main()

@@ -31,7 +31,7 @@ class DistillKL(nn.Module):
         p_s = F.log_softmax(y_s / self.T, dim=1)
         p_t = F.softmax(y_t / self.T, dim=1)
         # Sử dụng reduction='sum' kết hợp chia cho batch_size tương đương với code gốc
-        loss = F.kl_div(p_s, p_t, reduction='sum') * (self.T**2) / y_s.shape[0]
+        loss = F.kl_div(p_s, p_t, size_average=False) * (self.T**2) / y_s.shape[0]
         return loss
 
 
@@ -43,39 +43,40 @@ class Unlearner:
         self.criterion = nn.CrossEntropyLoss()
     
 
-    def _train_distill_epoch(self, loader, model_s, model_t, optimizer, criterion_div, split, alpha, gamma):
-        """Hàm lõi chạy 1 epoch Distillation"""
+    def _train_distill_epoch(self, loader, model_s, model_t, optimizer, criterion_div, split, alpha, gamma, T):
         model_s.train()
+        model_t.eval()
         total_loss = 0.0
-
+        
         for inputs, targets in loader:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            optimizer.zero_grad()
-            
-            # Student suy nghĩ
-            logit_s = model_s(inputs)
-            
-            # Teacher đưa đáp án mẫu (không tính gradient)
+            logit_s = model_s(inputs) 
             with torch.no_grad():
                 logit_t = model_t(inputs)
-
+                
             loss_cls = self.criterion(logit_s, targets)
-            loss_div = criterion_div(logit_s, logit_t)
+            
+            # CHÌA KHÓA TOÁN HỌC: Nhân KL Divergence loss với T^2
+            loss_div = criterion_div(logit_s, logit_t) * (T ** 2)
 
-            # Lựa chọn chế độ theo tham số 'split'
             if split == "minimize":
-                # Ép Student giống Teacher và đoán đúng nhãn
+                # Kết hợp Cross-Entropy gốc và KL Distillation để bảo toàn tri thức tập Retain
                 loss = gamma * loss_cls + alpha * loss_div
             elif split == "maximize":
-                # Ép Student dự đoán khác Teacher càng nhiều càng tốt
+                # Pha phá hủy tri thức tập Forget: đẩy khoảng cách phân phối ra xa
                 loss = -loss_div
-
+            
+            optimizer.zero_grad()
             loss.backward()
+            
+            # Khống chế độ lớn gradient cực kỳ nghiêm ngặt
+            torch.nn.utils.clip_grad_norm_(model_s.parameters(), max_norm=1.0)
+            
             optimizer.step()
             total_loss += loss.item()
 
-        return total_loss / len(loader)
+        return total_loss / len(loader) if len(loader) > 0 else 0.0
 
 
     
@@ -347,126 +348,174 @@ class Unlearner:
 
     
 
-    def scrub_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, unlr = 0.001):
+    def scrub_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, test_loader):
         """
-        Thuật toán SCRUB SOTA: Alternating Min-Max Knowledge Distillation
+        Thuật toán SCRUB SOTA chuẩn hóa toán học.
         """
-        # ==========================================
-        # 1. GÁN CỨNG HYPERPARAMETERS CHUẨN SOTA
-        # ==========================================
-        T = 2           # Nhiệt độ làm mềm xác suất (Softmax Temperature)
-        alpha = 0.5       # Trọng số cho KL Divergence
-        gamma = 1       # Trọng số cho Cross-Entropy (thường để rất nhỏ hoặc 0 để tin tưởng hoàn toàn vào Teacher)
-        msteps = 3        # Số lượng epoch cho phép phá hủy (Maximize). Nếu để quá cao, model sẽ hỏng hoàn toàn.
-        sgda_lr=0.001
-        sgda_momentum = 0.9
-        sgda_weight_decay = 0.1
-        epochs=10
-        # ==========================================
-        # 2. CHUẨN BỊ DATA LOADERS
-        # ==========================================
+        T = 5             # Softmax Temperature
+        alpha = 5         # Trọng số cho KL Divergence
+        gamma = 1         # Trọng số cho Cross-Entropy
+        msteps = 3        # Số epoch chạy pha Maximize
+        epochs = 6
+        
+        # 1. PHÂN CHIA DỮ LIỆU
         all_forget_indices = set(range(len(forget_dataset_base)))
         remove_indices = set(indices_to_remove)
-        
         keep_in_forget_indices = list(all_forget_indices - remove_indices)
         
         actual_forget_dataset = Subset(forget_dataset_base, list(remove_indices))        
         remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
-        
-        # C. Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
         actual_retain_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
-
-        # ==========================================
-        # 2. CHUẨN BỊ DATA LOADERS
-        # ==========================================
-        retain_loader = DataLoader(actual_retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
-        forget_loader = DataLoader(actual_forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
-
-        # ==========================================
-        # 3. KHỞI TẠO MÔ HÌNH (STUDENT & TEACHER)
-        # ==========================================
-        # Student: Bắt đầu từ mô hình đã nhiễm dữ liệu
+    
+        # Tăng batch_size của forget_loader lên một chút để làm mịn gradient, tránh nhiễu gây sụp đổ
+        retain_loader = DataLoader(actual_retain_dataset, batch_size=64, shuffle=True)
+        forget_loader = DataLoader(actual_forget_dataset, batch_size=16, shuffle=True) 
+    
+        eval_retain_loader = DataLoader(actual_retain_dataset, batch_size=256, shuffle=False)
+        eval_keep_loader = DataLoader(remaining_forget_dataset, batch_size=256, shuffle=False)
+        eval_forget_loader = DataLoader(actual_forget_dataset, batch_size=256, shuffle=False)
+    
+        def evaluate_acc(eval_model, loader):
+            eval_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for imgs, lbls in loader:
+                    imgs, lbls = imgs.to(self.device), lbls.to(self.device)
+                    outputs = eval_model(imgs)
+                    _, predicted = outputs.max(1)
+                    total += lbls.size(0)
+                    correct += predicted.eq(lbls).sum().item()
+            return 100.0 * correct / total if total > 0 else 0.0
+    
+        # --- ĐO BEFORE ---
+        print("\n" + "="*80)
+        print(" ĐÁNH GIÁ HIỆU NĂNG TRƯỚC KHI UNLEARN (BEFORE - SCRUB) ".center(80, "="))
+        acc_retain_before = evaluate_acc(self.target_model, eval_retain_loader)
+        acc_keep_before = evaluate_acc(self.target_model, eval_keep_loader)
+        acc_forget_before = evaluate_acc(self.target_model, eval_forget_loader)
+        acc_test_before = evaluate_acc(self.target_model, test_loader)
+        print(f"• Retain Accuracy: {acc_retain_before:.2f}%")
+        print(f"• Keep Forget Acc: {acc_keep_before:.2f}%")
+        print(f"• Deleted Forget Acc: {acc_forget_before:.2f}%")
+        print(f"• Test Accuracy: {acc_test_before:.2f}%")
+        print("="*80)
+    
         model_s = copy.deepcopy(self.target_model)
-
-
-        module_list = nn.ModuleList([])
-        module_list.append(model_s)
-        trainable_list = nn.ModuleList([])
-        trainable_list.append(model_s)
-        # Teacher: Mô hình chuẩn mực để tham chiếu. 
-        # Trong SCRUB gốc, Teacher chính là target_model đóng băng. 
-        # (Nếu thực nghiệm nâng cao, bạn có thể truyền self.base_model vào đây)
         model_t = copy.deepcopy(self.target_model)
-        model_t.eval() # Bắt buộc đóng băng Teacher
         
-        # optimizer = optim.SGD(model_s.parameters(), lr=sgda_lr, momentum=sgda_momentum, weight_decay=sgda_weight_decay)
-        optimizer = optim.Adam(trainable_list.parameters(), lr=sgda_lr, weight_decay=sgda_weight_decay)
+        # CHÌA KHÓA: Sử dụng 2 Optimizers với LR khác nhau
+        # Pha Maximize (phá hủy) bắt buộc phải dùng LR cực kỳ nhỏ để tránh nổ mô hình
+        optimizer_max = optim.SGD(model_s.parameters(), lr=5e-6, momentum=0.9, weight_decay=5e-4)
+        # Pha Minimize (tái hấp thu tri thức) dùng LR thông thường
+        optimizer_min = optim.SGD(model_s.parameters(), lr=5e-4, momentum=0.9, weight_decay=5e-4)
         
         criterion_div = DistillKL(T)
-
-        # ==========================================
-        # 4. VÒNG LẶP MIN-MAX (THE ORCHESTRATOR)
-        # ==========================================
+    
         print(f"   [SCRUB Unlearn] Khởi động với {len(actual_retain_dataset)} Retain | {len(indices_to_remove)} Forget...")
         
         for epoch in range(1, epochs + 1):
-            
-            # Pha 1: Tẩy não (Maximize trên tập Forget) - Chỉ chạy trong vài bước đầu
+            # Pha 1: Tẩy não (Maximize)
             if epoch <= msteps:
                 max_loss = self._train_distill_epoch(
-                    forget_loader, model_s, model_t, optimizer, criterion_div, 
-                    split="maximize", alpha=alpha, gamma=gamma
+                    forget_loader, model_s, model_t, optimizer_max, criterion_div, 
+                    split="maximize", alpha=alpha, gamma=gamma, T=T
                 )
             else:
                 max_loss = 0.0
                 
-            # Pha 2: Củng cố (Minimize trên tập Retain) - Luôn chạy để bảo vệ trí nhớ
+            # Pha 2: Củng cố (Minimize)
             min_loss = self._train_distill_epoch(
-                retain_loader, model_s, model_t, optimizer, criterion_div, 
-                split="minimize", alpha=alpha, gamma=gamma
+                retain_loader, model_s, model_t, optimizer_min, criterion_div, 
+                split="minimize", alpha=alpha, gamma=gamma, T=T
             )
             
             print(f"   Epoch {epoch}/{epochs} | Maximize Loss: {max_loss:.4f} | Minimize Loss: {min_loss:.4f}")
-
+    
+        # --- ĐO AFTER ---
+        print("\n" + "="*80)
+        print(" ĐÁNH GIÁ HIỆU NĂNG SAU KHI UNLEARN (AFTER - SCRUB) ".center(80, "="))
+        acc_retain_after = evaluate_acc(model_s, eval_retain_loader)
+        acc_keep_after = evaluate_acc(model_s, eval_keep_loader)
+        acc_forget_after = evaluate_acc(model_s, eval_forget_loader)
+        acc_test_after = evaluate_acc(model_s, test_loader)
+        
+        print(f"• Retain Accuracy: {acc_retain_after:.2f}%  (Thay đổi: {acc_retain_after - acc_retain_before:+.2f}%)")
+        print(f"• Keep Forget Acc: {acc_keep_after:.2f}%  (Thay đổi: {acc_keep_after - acc_keep_before:+.2f}%)")
+        print(f"• Deleted Forget Acc: {acc_forget_after:.2f}%  (Thay đổi: {acc_forget_after - acc_forget_before:+.2f}%)")
+        print(f"• Test Accuracy: {acc_test_after:.2f}%  (Thay đổi: {acc_test_after - acc_test_before:+.2f}%)")
+        print("="*80 + "\n")
+    
         return model_s
 
 
-    def neggrad_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, num_classes=10):
+    def neggrad_unlearn(self, retain_dataset_base, forget_dataset_base, indices_to_remove, test_loader, num_classes=10):
         """
-        NegGrad+ Unlearn với Chance Level Clamping.
-        Đã cập nhật logic gộp (Merge) Dataset chuẩn xác.
+        NegGrad+ Unlearn với Chance Level Clamping và Đánh giá hiệu năng Trước & Sau Unlearn.
+        Thuật toán huấn luyện ngược được giữ nguyên bản 100%.
         """
         # ==========================================
-        # 1. GÁN CỨNG HYPERPARAMETERS 
+        # 1. GÁN CỨNG HYPERPARAMETERS (Giữ nguyên)
         # ==========================================
-        epochs=10
-        lr=0.01
-        alpha=0.8
+        epochs = 10
+        lr = 0.01
+        alpha = 0.8
         chance_level = -math.log(1.0 / num_classes)
         weight_decay = 0.0
+    
         # ==========================================
-        # 2. CHUẨN BỊ DATA LOADERS
+        # 2. CHUẨN BỊ DATA LOADERS (Giữ nguyên)
         # ==========================================
         all_forget_indices = set(range(len(forget_dataset_base)))
         remove_indices = set(indices_to_remove)  
         keep_in_forget_indices = list(all_forget_indices - remove_indices)
         actual_forget_dataset = Subset(forget_dataset_base, list(remove_indices))        
         remaining_forget_dataset = Subset(forget_dataset_base, keep_in_forget_indices)
-
-        
-        # C. Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
+    
+        # Tập Retain THỰC SỰ = Retain gốc + Phần còn lại của Forget
         actual_retain_dataset = ConcatDataset([retain_dataset_base, remaining_forget_dataset])
         retain_loader = DataLoader(actual_retain_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
         forget_loader = DataLoader(actual_forget_dataset, batch_size=Config.BATCH_SIZE, shuffle=True)
-
+    
+        # --- [ĐÁNH GIÁ] CHUẨN BỊ CÁC LOADER DÙNG RIÊNG CHO ĐO ĐẠC ---
+        eval_retain_loader = DataLoader(actual_retain_dataset, batch_size=256, shuffle=False, num_workers=2)
+        eval_forget_loader = DataLoader(actual_forget_dataset, batch_size=256, shuffle=False, num_workers=2)
+    
+        # Hàm hỗ trợ đo Accuracy nhanh của một Loader
+        def evaluate_acc(eval_model, loader):
+            eval_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for imgs, lbls in loader:
+                    imgs, lbls = imgs.to(self.device), lbls.to(self.device)
+                    outputs = eval_model(imgs)
+                    _, predicted = outputs.max(1)
+                    total += lbls.size(0)
+                    correct += predicted.eq(lbls).sum().item()
+            return 100.0 * correct / total if total > 0 else 0.0
+    
+        # --- [ĐÁNH GIÁ] ĐO ĐẠC TRƯỚC KHI CHẠY UNLEARN (BEFORE) ---
+        print("\n" + "="*80)
+        print(" ĐÁNH GIÁ HIỆU NĂNG TRƯỚC KHI UNLEARN (BEFORE - NEGGRAD+) ".center(80, "="))
+        
+        acc_retain_before = evaluate_acc(self.target_model, eval_retain_loader)
+        acc_forget_before = evaluate_acc(self.target_model, eval_forget_loader)
+        acc_test_before = evaluate_acc(self.target_model, test_loader)
+        
+        print(f"• Retain Accuracy (Huấn luyện thực tế giữ lại): {acc_retain_before:.2f}%")
+        print(f"• Forget Accuracy (Thực tế cần xóa hoàn toàn) : {acc_forget_before:.2f}%")
+        print(f"• Test Accuracy (Kiểm thử tổng quát chung)     : {acc_test_before:.2f}%")
+        print("="*80)
+    
         # ==========================================
-        # 3. KHỞI TẠO MÔ HÌNH VÀ VÒNG LẶP (Giữ nguyên như cũ)
+        # 3. KHỞI TẠO MÔ HÌNH VÀ VÒNG LẶP (Giữ nguyên bản 100%)
         # ==========================================
         model = copy.deepcopy(self.target_model)
         model.train()
         
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-
+    
         print(f"   [NegGrad+] Khởi động với alpha={alpha} | Chance Level: {chance_level:.4f}")
         print(f"   [Data] Retain thực sự: {len(actual_retain_dataset)} mẫu | Forget thực sự: {len(actual_forget_dataset)} mẫu")
         
@@ -479,34 +528,45 @@ class Unlearner:
                 
                 r_inputs, r_targets = r_inputs.to(self.device), r_targets.to(self.device)
                 f_inputs, f_targets = f_inputs.to(self.device), f_targets.to(self.device)
-
+    
                 optimizer.zero_grad()
-
+    
                 r_outputs = model(r_inputs)
                 f_outputs = model(f_inputs)
-
+    
                 r_loss = self.criterion(r_outputs, r_targets)
                 f_loss = self.criterion(f_outputs, f_targets)
-
+    
                 # Clamping ở ngưỡng Chance Level
                 f_loss_clamped = torch.clamp(f_loss, max=chance_level)
-
+    
                 # Công thức lõi
-                loss = alpha * (r_loss + l2_penalty(self.target_model, model, weight_decay ))   - (1 - alpha) * f_loss_clamped
-
+                loss = alpha * (r_loss + l2_penalty(self.target_model, model, weight_decay)) - (1 - alpha) * f_loss_clamped
+    
                 loss.backward()
                 optimizer.step()
                 
                 total_loss += loss.item()
                 r_loss_sum += r_loss.item()
                 f_loss_sum += f_loss.item()
-
-
-
-            
+    
             batches = len(retain_loader)
             print(f"   Epoch {epoch}/{epochs} | Tổng Loss: {total_loss/batches:.4f} "
                   f"(Retain: {r_loss_sum/batches:.4f}, Forget (Unclamped): {f_loss_sum/batches:.4f})")
+    
+        # --- [ĐÁNH GIÁ] ĐO ĐẠC SAU KHI CHẠY UNLEARN (AFTER) ---
+        print("\n" + "="*80)
+        print(" ĐÁNH GIÁ HIỆU NĂNG SAU KHI UNLEARN (AFTER - NEGGRAD+) ".center(80, "="))
+        
+        acc_retain_after = evaluate_acc(model, eval_retain_loader)
+        acc_forget_after = evaluate_acc(model, eval_forget_loader)
+        acc_test_after = evaluate_acc(model, test_loader)
+        
+        print(f"• Retain Accuracy (Huấn luyện thực tế giữ lại): {acc_retain_after:.2f}%  (Thay đổi: {acc_retain_after - acc_retain_before:+.2f}%)")
+        print(f"• Forget Accuracy (Thực tế đã xóa hoàn toàn) : {acc_forget_after:.2f}%  (Thay đổi: {acc_forget_after - acc_forget_before:+.2f}%)")
+        print(f"• Test Accuracy (Kiểm thử tổng quát chung)     : {acc_test_after:.2f}%  (Thay đổi: {acc_test_after - acc_test_before:+.2f}%)")
+        print("="*80 + "\n")
+        
         return model
 
     def retrain_from_scratch(self, retain_dataset_base, forget_dataset_base, indices_to_remove, 

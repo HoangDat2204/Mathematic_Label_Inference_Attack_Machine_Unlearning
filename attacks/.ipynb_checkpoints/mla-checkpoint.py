@@ -403,7 +403,6 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
     if target_bias is None:
         print("[MLA Error] Không tìm thấy Bias lớp cuối phù hợp.")
         return []
-
     # if isinstance(confident, torch.Tensor):
     #     target_bias = confident.detach().cpu().numpy().flatten()
     # else:
@@ -445,9 +444,7 @@ def attack_mla(proxy_gradients, batch_size, confident, num_classes=10, approx = 
     else:
         alpha = 10.0
         beta = 10.0
-    print("MAX P: ", max_p)
     boost_factor = alpha  + beta * (1.0 - max_p) *( 1/num_classes)
-    print("Boost factor: ", boost_factor)
     # Tính Diagonal cuối cùng
     final_diagonal_val = base_diagonal_val * boost_factor
     
