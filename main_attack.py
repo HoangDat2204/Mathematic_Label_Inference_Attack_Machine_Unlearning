@@ -358,6 +358,8 @@ def main():
     parser.add_argument('--alpha', default=100.0, type=float, 
                         help='Mức độ phân phối IID: Nhỏ (0.1)=Lệch, Lớn (100)=Đều')
     parser.add_argument('--seed', default=42, type=int, help='Seed cố định (ví dụ 42)')
+    parser.add_argument('--noise_var', default=0.001, type=float, 
+                        help='Phương sai (σ²) của nhiễu Gaussian cho neggrad_gau')
     
 
     args = parser.parse_args()
@@ -553,6 +555,77 @@ def main():
                 vram_total[m] += vrams[m]
                 times_total[m] += times[m]
                 
+        elif (args.unlearned_algo == "neggrad_gau"):
+            # NegGrad + Gaussian Noise: Gradient Ascent với nhiễu N(0, σ²) tại mỗi bước cập nhật
+            model_approx, acc_retain_after_epoch, acc_test_after_epoch, acc_rem_forget_after_epoch, acc_batch_after_epoch, acc_batch_before_epoch = unlearner.approximate_unlearn_noise(
+                list_of_batches=batch_input,
+                retain_loader=retain_loader,
+                test_loader=test_loader,
+                forget_dataset=forget_dataset,
+                target_indices=target_indices,
+                lr=args.unlr,
+                batch_size=args.mini_batch_size,
+                local_epochs=args.local_loops,
+                noise_var=args.noise_var
+            )
+            acc_retain_after += acc_retain_after_epoch
+            acc_test_after += acc_test_after_epoch
+            acc_rem_forget_after += acc_rem_forget_after_epoch
+            acc_batch_after += acc_batch_after_epoch
+            acc_batch_before += acc_batch_before_epoch
+
+            diff_approx = get_weight_difference(target_model, model_approx)
+            confident_approx = compute_overlap_metric(diff_approx, target_model, num_classes)
+            
+            # Khởi tạo từ điển lưu thời gian chạy của từng phương pháp
+            times = {}
+            vrams = {}
+            flops_dict = {}
+            preds = {}
+                
+            weights, bias = get_last_layer_parameters(target_model)
+
+            # 1. Đo ZLG
+            preds['zlg'], times['zlg'], vrams['zlg'], flops_dict['zlg'] = measure_metrics(
+                device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
+            # 2. Đo MLA
+            preds['mla'], times['mla'], vrams['mla'], flops_dict['mla'] = measure_metrics(
+                device, attack_mla, diff_approx, attack_batch_size, confident_approx, num_classes, weights, bias
+            )
+            print(transform_to_count_list(preds['mla'], num_classes))
+            print(transform_to_count_list(true_labels, num_classes))
+
+            # --- IN KẾT QUẢ ĐỘ CHÍNH XÁC ---
+            print(f"[NegGrad+Noise σ²={args.noise_var}] "
+                f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% | "
+                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |")
+
+            # --- IN KẾT QUẢ TIME, VRAM & FLOPS ---
+            print("\n" + "-"*80)
+            print(" BÁO CÁO TÀI NGUYÊN TIÊU THỤ CỦA CÁC PHƯƠNG PHÁP ".center(80, "-"))
+            for m in preds:
+                f_val = flops_dict[m]
+                if f_val >= 1e9:
+                    f_str = f"{f_val / 1e9:.2f} GFLOPs"
+                elif f_val >= 1e6:
+                    f_str = f"{f_val / 1e6:.2f} MFLOPs"
+                elif f_val == -1:
+                    f_str = "N/A (Not Supported)"
+                else:
+                    f_str = f"{f_val} FLOPs"
+                
+                print(f"• {m.upper():<5} | Time: {times[m]:.4f}s | Peak VRAM: {vrams[m]:.4f} MB | Computations: {f_str}")
+            print("-" * 80 + "\n")
+
+            for m in preds:
+                results['approx'][m] += compute_batch_accuracy(true_labels, preds[m])
+                results_class['approx'][m] += compute_class_accuracy_iou(true_labels, preds[m])
+                flops_dict_total[m] += flops_dict[m]
+                vram_total[m] += vrams[m]
+                times_total[m] += times[m]
+                
         elif (args.unlearned_algo == "scrub"):
             print(f"   [SCRUB] Retraining via Alternating Min-Max Distillation...")
             model_scrub = unlearner.scrub_unlearn(retain_dataset, forget_dataset, target_indices, test_loader)
@@ -655,7 +728,34 @@ def main():
             for m in preds_rt: 
                 results['retrain'][m] += compute_batch_accuracy(true_labels, preds_rt[m])
         
-        
+        elif (args.unlearned_algo == "finetuning"):
+            print(f"   [Finetune] Removing target data and retraining on remaining Forget set...")
+            model_finetune = unlearner.fine_tune_unlearn(
+                forget_dataset_base=forget_dataset,
+                indices_to_remove=target_indices,
+                unlr=args.unlr
+            )
+            
+            diff_finetune = get_weight_difference(target_model, model_finetune)
+            confident_finetune = compute_overlap_metric(diff_finetune, target_model, num_classes)
+            
+            weights, bias = get_last_layer_parameters(target_model)
+            
+            preds_ft = {}
+            # preds_ft['llg']  = attack_llg(diff_finetune, num_classes, args.batch_size)
+            # preds_ft['plus'] = attack_llg_plus(target_model, model_finetune, diff_finetune, args.unlr, aux_loader, args.batch_size, num_classes)
+            preds_ft['zlg']  = attack_zlg(target_model, model_finetune, diff_finetune, args.unlr, aux_loader, args.batch_size, num_classes)
+            # preds_ft['rlu']  = attack_rlu_full(target_model, model_finetune, diff_finetune, aux_loader, args.batch_size, args.unlr, num_epochs=1, num_classes=num_classes, device=device)
+            # preds_ft['rdm']  = create_balanced_labels(args.batch_size, num_classes)
+            preds_ft['mla']  = attack_mla(diff_finetune, batch_size=attack_batch_size, confident=confident_finetune, num_classes=num_classes, weights=weights, biases=bias)
+
+            print(f"[Finetune] "
+                f"ZLG: {compute_batch_accuracy(true_labels, preds_ft['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds_ft['zlg']):.1f}% | "
+                f"MLA: {compute_batch_accuracy(true_labels, preds_ft['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds_ft['mla']):.1f}% |")
+
+            for m in preds_ft:
+                results['finetune'][m] += compute_batch_accuracy(true_labels, preds_ft[m])
+                results_class['finetune'][m] += compute_class_accuracy_iou(true_labels, preds_ft[m])
         
         else:
             print("Hãy chọn thuật toán")
