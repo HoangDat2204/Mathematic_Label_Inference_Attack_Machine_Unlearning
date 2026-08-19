@@ -15,7 +15,7 @@ class Config:
     BATCH_SIZE = 128
     
     # Learning Rates (Tham khảo từ setup chuẩn của FL/Unlearning)
-    LR_PRETRAIN = 0.05   # Learning rate cho giai đoạn train tập lớn
+    LR_PRETRAIN = 0.01   # Learning rate cho giai đoạn train tập lớn
     LR_FINETUNE = 0.001  # Learning rate nhỏ hơn cho giai đoạn finetune 10k
     
     MOMENTUM = 0.9

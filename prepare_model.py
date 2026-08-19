@@ -1,10 +1,11 @@
-# File: prepare_model.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import argparse
 import os
 import time
+import numpy as np
 from configs import Config
 from recovery.data import get_dataloaders
 from recovery.nn.custom_cnn import get_custom_model
@@ -13,9 +14,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 Config.DEVICE = device
 print(f"Device: {device}")
 if device.type == 'cuda':
-    # Lấy index hiện tại từ device
     current_gpu_index = device.index 
-    # Lấy tên card
     gpu_name = torch.cuda.get_device_name(current_gpu_index)
     print(f"GPU Name: {gpu_name}")
 else:
@@ -62,6 +61,70 @@ def test(model, loader, criterion, device):
     return running_loss / len(loader), 100. * correct / total
 
 
+# =========================================================================
+# --- [NEW] HÀM TÍNH TOÁN THỐNG KÊ PHÂN PHỐI VÀ PHƯƠNG SAI CÁC LỚP ---
+# =========================================================================
+def evaluate_class_stats(model, loader, num_classes, device):
+    """
+    Tính toán các chỉ số phân phối lớp và phân tích Phương sai trên Vector E đã được chuẩn hóa L2.
+    """
+    model.eval()
+    prob_sums = torch.zeros(num_classes, num_classes, device=device)
+    class_counts = torch.zeros(num_classes, device=device)
+    correct_counts = torch.zeros(num_classes, device=device)
+    
+    with torch.no_grad():
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            
+            probs = F.softmax(outputs, dim=1)
+            _, predicted = outputs.max(1)
+            
+            for c in range(num_classes):
+                mask = (targets == c)
+                count_c = mask.sum().item()
+                if count_c > 0:
+                    class_counts[c] += count_c
+                    prob_sums[c] += probs[mask].sum(dim=0)
+                    correct_counts[c] += (predicted[mask] == targets[mask]).sum().item()
+                    
+    class_counts_safe = torch.where(class_counts == 0, torch.ones_like(class_counts), class_counts)
+    
+    avg_probs = prob_sums / class_counts_safe.unsqueeze(1)
+    class_accs = (correct_counts / class_counts_safe) * 100.0
+    
+    # 1. Tính toán Vector sai số E
+    E_vector = 100.0 - class_accs
+    
+    # 2. Tính L2 Norm của Vector E
+    l2_norm = torch.norm(E_vector, p=2).item()
+    
+    # 3. Chuẩn hóa Vector E theo L2 Norm (Độ dài hình học của vector co về bằng 1)
+    if l2_norm > 0:
+        E_normalized = E_vector / l2_norm
+    else:
+        E_normalized = torch.zeros_like(E_vector)
+        
+    # 4. --- LOGIC CHỦ CHỐT: TÍNH PHƯƠNG SAI TRÊN VECTOR E ĐÃ CHUẨN HÓA L2 ---
+    var_E_normalized = torch.var(E_normalized, unbiased=False).item()
+    # ------------------------------------------------------------------------
+    
+    mean_acc = torch.mean(class_accs).item()
+    std_acc = torch.std(class_accs, unbiased=False).item() 
+    cv_ratio = std_acc / mean_acc if mean_acc > 0 else 0.0 
+    
+    return (avg_probs.cpu().numpy(), 
+            class_accs.cpu().numpy(), 
+            mean_acc, 
+            std_acc, 
+            cv_ratio, 
+            l2_norm, 
+            var_E_normalized,       # Trả về phương sai của vector đã chuẩn hóa
+            E_vector.cpu().numpy(),
+            E_normalized.cpu().numpy()) # Trả về thêm vector đã chuẩn hóa để quan sát
+
+# =========================================================================
 
 
 def main():
@@ -95,10 +158,38 @@ def main():
         t0 = time.time()
         train_loss, train_acc = train_epoch(model, retain_loader, criterion, optimizer, device)
         test_loss, test_acc = test(model, test_loader, criterion, device)
+        
+        # --- [NEW] THỰC THI ĐO ĐẠC THỐNG KÊ LỚP ---
+        (avg_probs, class_accs, mean_acc, std_acc, cv_ratio, 
+         l2_norm, var_E_normalized, E_vector, E_normalized) = evaluate_class_stats(model, retain_loader, num_classes, device)
+        
         scheduler.step()
+        
+        # In ra các thông số huấn luyện tiêu chuẩn
         print(f"Epoch {epoch+1:02d}/{args.pretrain_epochs} | "
               f"Loss: {train_loss:.3f} | Acc: {train_acc:.2f}% | "
               f"Test Acc: {test_acc:.2f}% | Time: {time.time()-t0:.1f}s")
+              
+        # In các thông số phân tán cơ bản
+        print(f"   [Thống kê phân tán] Mean Acc: {mean_acc:.2f}% | Độ lệch chuẩn (Std): {std_acc:.4f} | Hệ số biến thiên (CV): {cv_ratio:.6f}")
+        
+        # --- CẬP NHẬT PHẦN HIỂN THỊ PHƯƠNG SAI TRÊN VECTOR ĐÃ NORM ---
+        print(f"   [Phân tích Vector Sai Số E (100 - Acc)]:")
+        print(f"     • L2 Norm của Vector E            : {l2_norm:.4f}")
+        print(f"     • Phương sai trên Vector E đã Norm: {var_E_normalized:.8f}")  # In 8 chữ số thập phân
+        
+        # In chi tiết các giá trị của Vector E đã chuẩn hóa (5 lớp đầu)
+        limit_print = min(num_classes, 5)
+        E_norm_str = ", ".join([f"{val:.4f}" for val in E_normalized[:limit_print]])
+        print(f"     • Chi tiết Vector E đã Norm (5 lớp): [{E_norm_str}]" + (" ..." if num_classes > 5 else ""))
+        
+        print("   [Xác suất dự đoán trung bình của từng lớp (Softmax Vector)]:")
+        for c in range(limit_print):
+            prob_vec_str = ", ".join([f"{p:.4f}" for p in avg_probs[c]])
+            print(f"     Lớp {c:02d}: [{prob_vec_str}] (Accuracy riêng lớp: {class_accs[c]:.2f}%)")
+        if num_classes > 5:
+            print(f"     ... (Đã ẩn {num_classes - 5} lớp còn lại để tránh tràn màn hình log console) ...")
+        print("-" * 80)
 
     # >>> SAVE MODEL PRETRAINED (Gold Standard) <<<
     pretrain_name = f"{args.model}_{args.dataset}_pretrained.pth"

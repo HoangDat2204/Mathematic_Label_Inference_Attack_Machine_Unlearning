@@ -23,11 +23,42 @@ from attacks.rlu import attack_rlu_full
 # [NEW] Import MLA
 # from attacks.mla import attack_mla, attack_mla_plus, compute_basis_from_aux
 from attacks.mla import attack_mla
+import torch.nn as nn
 
 from collections import Counter
 
 
 import torch
+
+def transform_to_count_list(input_list, n):
+    # Khởi tạo list mới gồm n phần tử có giá trị ban đầu là 0
+    result = [0] * n
+    
+    # Đếm số lần xuất hiện và cộng 1 vào vị trí index tương ứng
+    for num in input_list:
+        if 0 <= num < n:  # Đảm bảo giá trị num nằm trong phạm vi chỉ số của list mới
+            result[num] += 1
+            
+    return result
+
+def get_last_layer_parameters(model):
+    """
+    Tự động tìm lớp nn.Linear cuối cùng trong mô hình PyTorch
+    và trả về trọng số (weight) cùng bias.
+    """
+    last_linear = None
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            last_linear = module
+            
+    if last_linear is not None:
+        # Lấy bản sao của tensor dưới dạng detach để tránh can thiệp vào đồ thị tính toán
+        weights = last_linear.weight.detach().clone()
+        biases = last_linear.bias.detach().clone() if last_linear.bias is not None else None
+        return weights, biases
+    else:
+        raise ValueError("Không tìm thấy lớp nn.Linear nào trong mô hình.")
+
 
 def measure_metrics(device, func, *args, **kwargs):
     """
@@ -448,50 +479,59 @@ def main():
             times = {}
             vrams = {}
             flops_dict = {}
+            
             preds = {}
-
+            # for m in methods:
+            #     preds[m]=[0]
+            #     flops_dict[m] = [0]
+            #     vrams[m] = [0
+            #     times[m] = 0
+                
+                
+            weights, bias = get_last_layer_parameters(target_model)
             # 1. Đo LLG
-            preds['llg'], times['llg'], vrams['llg'], flops_dict['llg'] = measure_metrics(
-                device, attack_llg, diff_approx, num_classes, args.batch_size
-            )
+            # preds['llg'], times['llg'], vrams['llg'], flops_dict['llg'] = measure_metrics(
+            #     device, attack_llg, diff_approx, num_classes, args.batch_size
+            # )
 
             # 2. Đo LLG+ (Plus)
-            preds['plus'], times['plus'], vrams['plus'], flops_dict['plus'] = measure_metrics(
-                device, attack_llg_plus, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
-            )
+            # preds['plus'], times['plus'], vrams['plus'], flops_dict['plus'] = measure_metrics(
+            #     device, attack_llg_plus, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            # )
 
             # 3. Đo ZLG
             preds['zlg'], times['zlg'], vrams['zlg'], flops_dict['zlg'] = measure_metrics(
                 device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
             )
 
-            # 4. Đo RLU
-            preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
-                device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
-            )
+            # # 4. Đo RLU
+            # preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
+            #     device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
+            # )
 
             # 5. Đo MLA
             preds['mla'], times['mla'], vrams['mla'], flops_dict['mla'] = measure_metrics(
-                device, attack_mla, diff_approx, attack_batch_size, confident_approx, num_classes
+                device, attack_mla, diff_approx, attack_batch_size, confident_approx, num_classes, weights, bias
             )
-
+            print(transform_to_count_list(preds['mla'], num_classes))
+            print(transform_to_count_list(true_labels, num_classes))
             # 6. Đo RDM (Random)
-            preds['rdm'], times['rdm'], vrams['rdm'], flops_dict['rdm'] = measure_metrics(
-                device, create_balanced_labels, args.batch_size, num_classes
-            )
+            # preds['rdm'], times['rdm'], vrams['rdm'], flops_dict['rdm'] = measure_metrics(
+            #     device, create_balanced_labels, args.batch_size, num_classes
+            # )
 
             # --- IN KẾT QUẢ ĐỘ CHÍNH XÁC ---
-            print(f"[Approx] LLG: | {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% |"
-                f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
-                f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% |"
-                f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% |{compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% |"
-                f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |"
-                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |" )
+            # print(f"[Approx] LLG: | {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% |"
+            #     f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% |")
+                # f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% |{compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% |"
+                # f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |"
+                # f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |" )
 
             # --- IN KẾT QUẢ TIME, VRAM & FLOPS ---
             print("\n" + "-"*80)
             print(" BÁO CÁO TÀI NGUYÊN TIÊU THỤ CỦA CÁC PHƯƠNG PHÁP ".center(80, "-"))
-            for m in ['llg', 'plus', 'zlg', 'rlu', 'mla', 'rdm']:
+            for m in preds:
                 # Định dạng hiển thị FLOPs (Giga FLOPs hoặc Mega FLOPs)
                 f_val = flops_dict[m]
                 if f_val >= 1e9:
@@ -520,19 +560,19 @@ def main():
 
             confident_scrub = compute_overlap_metric(diff_scrub, target_model, num_classes)
             preds_sc = {}
-            preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
-            preds_sc['plus'] = attack_llg_plus(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
+            # preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
+            # preds_sc['plus'] = attack_llg_plus(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
             preds_sc['zlg']  = attack_zlg(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
-            preds_sc['rlu']  = attack_rlu_full(target_model, model_scrub, diff_scrub, aux_loader, args.batch_size, 0.001, num_epochs= 1, num_classes = num_classes, device = device)
-            preds_sc['rdm']  = create_balanced_labels(args.batch_size, num_classes)
-            preds_sc['mla']  = attack_mla(diff_scrub, batch_size=attack_batch_size, confident=confident_scrub, num_classes=num_classes, approx=True)
+            # preds_sc['rlu']  = attack_rlu_full(target_model, model_scrub, diff_scrub, aux_loader, args.batch_size, 0.001, num_epochs= 1, num_classes = num_classes, device = device)
+            # preds_sc['rdm']  = create_balanced_labels(args.batch_size, num_classes)
+            # preds_sc['mla']  = attack_mla(diff_scrub, batch_size=attack_batch_size, confident=confident_scrub, num_classes=num_classes, approx=True)
 
-            print(f"[SCRUB ] LLG: {compute_batch_accuracy(true_labels, preds_sc['llg']):.1f}% | "
-                f"Plus: {compute_batch_accuracy(true_labels, preds_sc['plus']):.1f}% | "
-                f"ZLG: {compute_batch_accuracy(true_labels, preds_sc['zlg']):.1f}% | "
-                f"RLU: {compute_batch_accuracy(true_labels, preds_sc['rlu']):.1f}% | "
-                f"RDM: {compute_batch_accuracy(true_labels, preds_sc['rdm']):.1f}% | "
-                f"MLA: {compute_batch_accuracy(true_labels, preds_sc['mla']):.1f}% | " )
+            # print(f"[SCRUB ] LLG: {compute_batch_accuracy(true_labels, preds_sc['llg']):.1f}% | "
+                # f"Plus: {compute_batch_accuracy(true_labels, preds_sc['plus']):.1f}% | "
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_sc['zlg']):.1f}% | ")
+                # f"RLU: {compute_batch_accuracy(true_labels, preds_sc['rlu']):.1f}% | "
+                # f"RDM: {compute_batch_accuracy(true_labels, preds_sc['rdm']):.1f}% | "
+                # f"MLA: {compute_batch_accuracy(true_labels, preds_sc['mla']):.1f}% | " )
 
 
             for m in preds_sc: 
@@ -551,21 +591,21 @@ def main():
             
             # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_ng = {}
-            preds_ng['llg']  = attack_llg(diff_ng, num_classes, args.batch_size)
-            preds_ng['plus'] = attack_llg_plus(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
+            # preds_ng['llg']  = attack_llg(diff_ng, num_classes, args.batch_size)
+            # preds_ng['plus'] = attack_llg_plus(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
             preds_ng['zlg']  = attack_zlg(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
-            preds_ng['rlu']  = attack_rlu_full(target_model, model_ng, diff_ng, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
-            preds_ng['rdm']  = create_balanced_labels(args.batch_size, num_classes)
+            # preds_ng['rlu']  = attack_rlu_full(target_model, model_ng, diff_ng, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
+            # preds_ng['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             
             # Lưu ý: Cờ approx=True được giữ nguyên theo thiết lập ở khối SCRUB của bạn
-            preds_ng['mla']  = attack_mla(diff_ng, batch_size=attack_batch_size, confident=confident_ng, num_classes=num_classes, approx=True)
+            # preds_ng['mla']  = attack_mla(diff_ng, batch_size=attack_batch_size, confident=confident_ng, num_classes=num_classes, approx=True)
 
-            print(f"[NEGGRAD+] LLG: {compute_batch_accuracy(true_labels, preds_ng['llg']):.1f}% | "
-                f"Plus: {compute_batch_accuracy(true_labels, preds_ng['plus']):.1f}% | "
-                f"ZLG: {compute_batch_accuracy(true_labels, preds_ng['zlg']):.1f}% | "
-                f"RLU: {compute_batch_accuracy(true_labels, preds_ng['rlu']):.1f}% | "
-                f"RDM: {compute_batch_accuracy(true_labels, preds_ng['rdm']):.1f}% | "
-                f"MLA: {compute_batch_accuracy(true_labels, preds_ng['mla']):.1f}% | " )
+            # print(f"[NEGGRAD+] LLG: {compute_batch_accuracy(true_labels, preds_ng['llg']):.1f}% | "
+                # f"Plus: {compute_batch_accuracy(true_labels, preds_ng['plus']):.1f}% | "
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_ng['zlg']):.1f}% | ")
+                # f"RLU: {compute_batch_accuracy(true_labels, preds_ng['rlu']):.1f}% | "
+                # f"RDM: {compute_batch_accuracy(true_labels, preds_ng['rdm']):.1f}% | "
+                # f"MLA: {compute_batch_accuracy(true_labels, preds_ng['mla']):.1f}% | " )
 
             # Cập nhật kết quả vào từ điển tổng
             for m in preds_ng: 
