@@ -652,7 +652,7 @@ def main():
                 else:
                     f_str = f"{f_val} FLOPs"
                 
-                print(f"• {m.upper():<5} | Time: {times[m]:.4f}s | Peak VRAM: {vrams[m]:.4f} MB | Computations: {f_str}")
+                print(f"• {m.upper():<5} | Time: {times[m]:.4f}s | Peak VRAM: {vrams[m]:.4f} MB | Computations: {f_str}" )
             print("-" * 80 + "\n")
 
             for m in preds:
