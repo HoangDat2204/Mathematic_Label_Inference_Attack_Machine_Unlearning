@@ -16,7 +16,7 @@ import time
 from attacks.llg import attack_llg
 from attacks.llg_plus import attack_llg_plus
 from attacks.zlg import attack_zlg
-# from attacks.zlgp import attack_zlgp
+from attacks.zlgp import attack_zlgp
 from attacks.rlu import attack_rlu_full
 # from attacks.llg_plus_p import attack_llg_plusp,  compute_impact_and_offsetp
 
@@ -410,8 +410,8 @@ def main():
         class_to_indices[lbl].append(idx)
 
     # Init Results
-    methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla'] # mla_p = MLA+
-    # methods = ['llg', 'plus', 'zlg', 'rlu', 'rdm', 'mla', 'mla_p', 'zlgp', 'llg+p']
+    methods = ['llg', 'plus', 'zlg', 'zlgp', 'rlu', 'rdm', 'mla'] # mla_p = MLA+
+    # methods = ['llg', 'plus', 'zlg', 'zlgp', 'rlu', 'rdm', 'mla', 'mla_p', 'llg+p']
     results = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
     results_class = {'approx': {m:0 for m in methods}, 'finetune': {m:0 for m in methods}, 'scrub': {m:0 for m in methods} , 'neggrad': {m:0 for m in methods}, 'retrain': {m:0 for m in methods}}
     # Vòng lặp thí nghiệm
@@ -420,9 +420,9 @@ def main():
     acc_rem_forget_after = 0
     acc_batch_after = 0
     acc_batch_before = 0
-    flops_dict_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
-    vram_total =  {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
-    times_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'rlu': 0, 'mla': 0, 'rdm': 0}
+    flops_dict_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'zlgp': 0, 'rlu': 0, 'mla': 0, 'rdm': 0}
+    vram_total =  {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'zlgp': 0, 'rlu': 0, 'mla': 0, 'rdm': 0}
+    times_total = {'llg': 0 , 'plus': 0 , 'zlg': 0 , 'zlgp': 0, 'rlu': 0, 'mla': 0, 'rdm': 0}
     for loop in range(args.total_loops):
         print(f"\n>>> Loop {loop+1}/{args.total_loops} (Alpha={args.alpha})")
 
@@ -506,7 +506,11 @@ def main():
                 device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
             )
 
-            # # 4. Đo RLU
+            # 3b. Đo ZLG+ (Dữ liệu thật)
+            preds['zlgp'], times['zlgp'], vrams['zlgp'], flops_dict['zlgp'] = measure_metrics(
+                device, attack_zlgp, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
             # preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
             #     device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
             # )
@@ -525,7 +529,8 @@ def main():
             # --- IN KẾT QUẢ ĐỘ CHÍNH XÁC ---
             # print(f"[Approx] LLG: | {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% |"
             #     f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
-            print(f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% |")
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% | "
+                  f"ZLG+: {compute_batch_accuracy(true_labels, preds['zlgp']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlgp']):.1f}% |")
                 # f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% |{compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% |"
                 # f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |"
                 # f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% |  {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |" )
@@ -600,7 +605,12 @@ def main():
                 device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
             )
 
-            # 4. Đo RLU
+            # 4. Đo ZLG+ (Dữ liệu thật)
+            preds['zlgp'], times['zlgp'], vrams['zlgp'], flops_dict['zlgp'] = measure_metrics(
+                device, attack_zlgp, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
+            # 5. Đo RLU
             preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
                 device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
             )
@@ -623,6 +633,7 @@ def main():
                 f"LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% | "
                 f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
                 f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% | "
+                f"ZLG+: {compute_batch_accuracy(true_labels, preds['zlgp']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlgp']):.1f}% | "
                 f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% | "
                 f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% | "
                 f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |")
@@ -661,13 +672,14 @@ def main():
             # preds_sc['llg']  = attack_llg(diff_scrub, num_classes, args.batch_size)
             # preds_sc['plus'] = attack_llg_plus(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
             preds_sc['zlg']  = attack_zlg(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
+            preds_sc['zlgp'] = attack_zlgp(target_model, model_scrub, diff_scrub, 0.001, aux_loader, args.batch_size, num_classes)
             # preds_sc['rlu']  = attack_rlu_full(target_model, model_scrub, diff_scrub, aux_loader, args.batch_size, 0.001, num_epochs= 1, num_classes = num_classes, device = device)
             # preds_sc['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             # preds_sc['mla']  = attack_mla(diff_scrub, batch_size=attack_batch_size, confident=confident_scrub, num_classes=num_classes, approx=True)
 
             # print(f"[SCRUB ] LLG: {compute_batch_accuracy(true_labels, preds_sc['llg']):.1f}% | "
                 # f"Plus: {compute_batch_accuracy(true_labels, preds_sc['plus']):.1f}% | "
-            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_sc['zlg']):.1f}% | ")
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_sc['zlg']):.1f}% | ZLG+: {compute_batch_accuracy(true_labels, preds_sc['zlgp']):.1f}% | ")
                 # f"RLU: {compute_batch_accuracy(true_labels, preds_sc['rlu']):.1f}% | "
                 # f"RDM: {compute_batch_accuracy(true_labels, preds_sc['rdm']):.1f}% | "
                 # f"MLA: {compute_batch_accuracy(true_labels, preds_sc['mla']):.1f}% | " )
@@ -692,6 +704,7 @@ def main():
             # preds_ng['llg']  = attack_llg(diff_ng, num_classes, args.batch_size)
             # preds_ng['plus'] = attack_llg_plus(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
             preds_ng['zlg']  = attack_zlg(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_ng['zlgp'] = attack_zlgp(target_model, model_ng, diff_ng, 0.01, aux_loader, args.batch_size, num_classes)
             # preds_ng['rlu']  = attack_rlu_full(target_model, model_ng, diff_ng, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
             # preds_ng['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             
@@ -700,7 +713,7 @@ def main():
 
             # print(f"[NEGGRAD+] LLG: {compute_batch_accuracy(true_labels, preds_ng['llg']):.1f}% | "
                 # f"Plus: {compute_batch_accuracy(true_labels, preds_ng['plus']):.1f}% | "
-            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_ng['zlg']):.1f}% | ")
+            print(f"ZLG: {compute_batch_accuracy(true_labels, preds_ng['zlg']):.1f}% | ZLG+: {compute_batch_accuracy(true_labels, preds_ng['zlgp']):.1f}% | ")
                 # f"RLU: {compute_batch_accuracy(true_labels, preds_ng['rlu']):.1f}% | "
                 # f"RDM: {compute_batch_accuracy(true_labels, preds_ng['rdm']):.1f}% | "
                 # f"MLA: {compute_batch_accuracy(true_labels, preds_ng['mla']):.1f}% | " )
@@ -736,8 +749,9 @@ def main():
             # Khởi chạy các cuộc tấn công suy diễn nhãn (Label Inference Attacks)
             preds_rt = {}
             preds_rt['llg']  = attack_llg(diff_retrain, num_classes, args.batch_size)
-            preds_rt['plus'] = attack_llg_plus(target_model, model_retrain, diff_ndiff_retraing, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_rt['plus'] = attack_llg_plus(target_model, model_retrain, diff_retrain, 0.01, aux_loader, args.batch_size, num_classes)
             preds_rt['zlg']  = attack_zlg(target_model, model_retrain, diff_retrain, 0.01, aux_loader, args.batch_size, num_classes)
+            preds_rt['zlgp'] = attack_zlgp(target_model, model_retrain, diff_retrain, 0.01, aux_loader, args.batch_size, num_classes)
             preds_rt['rlu']  = attack_rlu_full(target_model, model_retrain, diff_retrain, aux_loader, args.batch_size, 0.01, num_epochs= 1, num_classes = num_classes, device = device)
             preds_rt['rdm']  = create_balanced_labels(args.batch_size, num_classes)            
             preds_rt['mla']  = attack_mla(diff_retrain, batch_size=attack_batch_size, confident=confident_ng, num_classes=num_classes, approx=True)
@@ -745,6 +759,7 @@ def main():
             print(f"[NEGGRAD+] LLG: {compute_batch_accuracy(true_labels, preds_rt['llg']):.1f}% | "
                 f"Plus: {compute_batch_accuracy(true_labels, preds_rt['plus']):.1f}% | "
                 f"ZLG: {compute_batch_accuracy(true_labels, preds_rt['zlg']):.1f}% | "
+                f"ZLG+: {compute_batch_accuracy(true_labels, preds_rt['zlgp']):.1f}% | "
                 f"RLU: {compute_batch_accuracy(true_labels, preds_rt['rlu']):.1f}% | "
                 f"RDM: {compute_batch_accuracy(true_labels, preds_rt['rdm']):.1f}% | "
                 f"MLA: {compute_batch_accuracy(true_labels, preds_rt['mla']):.1f}% | " )
@@ -770,12 +785,14 @@ def main():
             # preds_ft['llg']  = attack_llg(diff_finetune, num_classes, args.batch_size)
             # preds_ft['plus'] = attack_llg_plus(target_model, model_finetune, diff_finetune, args.unlr, aux_loader, args.batch_size, num_classes)
             preds_ft['zlg']  = attack_zlg(target_model, model_finetune, diff_finetune, args.unlr, aux_loader, args.batch_size, num_classes)
+            preds_ft['zlgp'] = attack_zlgp(target_model, model_finetune, diff_finetune, args.unlr, aux_loader, args.batch_size, num_classes)
             # preds_ft['rlu']  = attack_rlu_full(target_model, model_finetune, diff_finetune, aux_loader, args.batch_size, args.unlr, num_epochs=1, num_classes=num_classes, device=device)
             # preds_ft['rdm']  = create_balanced_labels(args.batch_size, num_classes)
             preds_ft['mla']  = attack_mla(diff_finetune, batch_size=attack_batch_size, confident=confident_finetune, num_classes=num_classes, weights=weights, biases=bias)
 
             print(f"[Finetune] "
                 f"ZLG: {compute_batch_accuracy(true_labels, preds_ft['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds_ft['zlg']):.1f}% | "
+                f"ZLG+: {compute_batch_accuracy(true_labels, preds_ft['zlgp']):.1f}% | {compute_class_accuracy_iou(true_labels, preds_ft['zlgp']):.1f}% | "
                 f"MLA: {compute_batch_accuracy(true_labels, preds_ft['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds_ft['mla']):.1f}% |")
 
             for m in preds_ft:
@@ -819,7 +836,7 @@ def main():
     print(f"{'Acc retain':<10} | {'Acc test':<11} | {'Acc Finetune':<11} | {'Acc forget':<11}| {'Acc forget before':<11}  " )
     print(f"{acc_retain_after / args.total_loops :<10} | {acc_test_after / args.total_loops :10.2f}% | {acc_rem_forget_after / args.total_loops :10.2f}% | {acc_batch_after / args.total_loops:10.2f}% | {acc_batch_before / args.total_loops:10.2f}%")
 
-    for m in ['llg', 'plus', 'zlg', 'rlu', 'mla', 'rdm']:
+    for m in ['llg', 'plus', 'zlg', 'zlgp', 'rlu', 'mla', 'rdm']:
       
         print(f"• {m.upper():<5} | Time: {times_total[m]/args.total_loops:.4f}s | Peak VRAM: {vram_total[m]/args.total_loops:.2f} MB | Computations: {flops_dict_total[m]/args.total_loops}")
 
