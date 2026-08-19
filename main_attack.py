@@ -585,22 +585,47 @@ def main():
                 
             weights, bias = get_last_layer_parameters(target_model)
 
-            # 1. Đo ZLG
+            # 1. Đo LLG
+            preds['llg'], times['llg'], vrams['llg'], flops_dict['llg'] = measure_metrics(
+                device, attack_llg, diff_approx, num_classes, args.batch_size
+            )
+
+            # 2. Đo LLG+ (Plus)
+            preds['plus'], times['plus'], vrams['plus'], flops_dict['plus'] = measure_metrics(
+                device, attack_llg_plus, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
+            )
+
+            # 3. Đo ZLG
             preds['zlg'], times['zlg'], vrams['zlg'], flops_dict['zlg'] = measure_metrics(
                 device, attack_zlg, target_model, model_approx, diff_approx, args.unlr, aux_loader, args.batch_size, num_classes
             )
 
-            # 2. Đo MLA
+            # 4. Đo RLU
+            preds['rlu'], times['rlu'], vrams['rlu'], flops_dict['rlu'] = measure_metrics(
+                device, attack_rlu_full, target_model, model_approx, diff_approx, aux_loader, args.batch_size, args.unlr, 1, num_classes, device
+            )
+
+            # 5. Đo MLA
             preds['mla'], times['mla'], vrams['mla'], flops_dict['mla'] = measure_metrics(
                 device, attack_mla, diff_approx, attack_batch_size, confident_approx, num_classes, weights, bias
             )
+
+            # 6. Đo RDM (Random Baseline)
+            preds['rdm'], times['rdm'], vrams['rdm'], flops_dict['rdm'] = measure_metrics(
+                device, create_balanced_labels, args.batch_size, num_classes
+            )
+
             print(transform_to_count_list(preds['mla'], num_classes))
             print(transform_to_count_list(true_labels, num_classes))
 
             # --- IN KẾT QUẢ ĐỘ CHÍNH XÁC ---
             print(f"[NegGrad+Noise σ²={args.noise_var}] "
+                f"LLG: {compute_batch_accuracy(true_labels, preds['llg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['llg']):.1f}% | "
+                f"Plus: {compute_batch_accuracy(true_labels, preds['plus']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['plus']):.1f}% | "
                 f"ZLG: {compute_batch_accuracy(true_labels, preds['zlg']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['zlg']):.1f}% | "
-                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% |")
+                f"RLU: {compute_batch_accuracy(true_labels, preds['rlu']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rlu']):.1f}% | "
+                f"MLA: {compute_batch_accuracy(true_labels, preds['mla']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['mla']):.1f}% | "
+                f"RDM: {compute_batch_accuracy(true_labels, preds['rdm']):.1f}% | {compute_class_accuracy_iou(true_labels, preds['rdm']):.1f}% |")
 
             # --- IN KẾT QUẢ TIME, VRAM & FLOPS ---
             print("\n" + "-"*80)
